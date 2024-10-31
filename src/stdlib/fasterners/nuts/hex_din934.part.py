@@ -113,7 +113,7 @@ class HexNut(Part):
     def add_thread(self):
         thread_height = self.thickness
         H = self.thread_pitch * math.sqrt(3) / 2
-        thread_radius = self.nominal_diameter / 2 - H / 4
+        thread_radius = self.nominal_diameter / 2 + H / 4
 
         path = Helix3D(
             self.thread_pitch,
@@ -130,8 +130,8 @@ class HexNut(Part):
     def get_thread_profile(self, pitch):
         H = pitch * math.sqrt(3) / 2
         s = Sketch(self.xz())
-        s.pencil.line_to(0, -pitch / 2 + pitch / 16)
-        s.pencil.line_to(5 / 8 * H, -pitch / 8)
+        s.pencil.move_to(0, -pitch / 2 + pitch / 16)
+        s.pencil.line_to(-5 / 8 * H, -pitch / 8)
         s.pencil.line(0, pitch / 4)
         s.pencil.line_to(0, pitch / 2 - pitch / 16)
         profile = s.pencil.close()
