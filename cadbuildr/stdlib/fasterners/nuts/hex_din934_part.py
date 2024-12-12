@@ -1,5 +1,6 @@
-from foundation import *
+from cadbuildr.foundation import *
 import math
+
 
 class HexNut(Part):
     def __init__(self, size, with_thread=True):
@@ -7,10 +8,10 @@ class HexNut(Part):
         self.with_thread = with_thread
 
         dimensions = self.dimension_table[size]
-        self.width_across_flats = dimensions['width_across_flats']  # WAF
-        self.thickness = dimensions['thickness']
-        self.nominal_diameter = dimensions['nominal_diameter']
-        self.thread_pitch = dimensions['thread_pitch']
+        self.width_across_flats = dimensions["width_across_flats"]  # WAF
+        self.thickness = dimensions["thickness"]
+        self.nominal_diameter = dimensions["nominal_diameter"]
+        self.thread_pitch = dimensions["thread_pitch"]
 
         self.get_body_sketch()
         if self.with_thread:
@@ -136,6 +137,7 @@ class HexNut(Part):
         s.pencil.line_to(0, pitch / 2 - pitch / 16)
         profile = s.pencil.close()
         return profile
+
 
 if __name__ == "__main__":
     show(HexNut(size="M6", with_thread=True))

@@ -1,6 +1,20 @@
-#%%
-from foundation import Part, Sketch, Point, Circle, Extrusion, show, Axis, Line, Lathe, Sweep, Helix3D, Point3D
+# %%
+from cadbuildr.foundation import (
+    Part,
+    Sketch,
+    Point,
+    Circle,
+    Extrusion,
+    show,
+    Axis,
+    Line,
+    Lathe,
+    Sweep,
+    Helix3D,
+    Point3D,
+)
 import math
+
 
 class ThreadedRod(Part):
     def __init__(self, diameter, length, thread_pitch=1.25, with_thread=True):
@@ -53,6 +67,7 @@ class ThreadedRod(Part):
 
         sweep = Sweep(profile, path)
         self.add_operation(sweep)
+
 
 if __name__ == "__main__":
     show(ThreadedRod(diameter=5, length=30, thread_pitch=1.5, with_thread=True))

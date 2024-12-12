@@ -1,4 +1,4 @@
-from foundation import (
+from cadbuildr.foundation import (
     Helix3D,
     Sweep,
     Part,
@@ -6,10 +6,11 @@ from foundation import (
     Axis,
     Line,
     Extrusion,
-    Point, 
+    Point,
     Lathe,
     show,
-    Point3D)
+    Point3D,
+)
 import math
 
 

@@ -1,4 +1,5 @@
-from foundation import Part, Sketch, Circle, Extrusion, show
+from cadbuildr.foundation import Part, Sketch, Circle, Extrusion, show
+
 
 class Washer(Part):
     def __init__(self, outer_radius=20, inner_radius=10, thickness=2):
@@ -13,17 +14,18 @@ class Washer(Part):
 
         # Create outer circle
         outer_circle = Circle(s.origin, self.outer_radius)
-        
+
         # Extrude the outer circle to create the washer base
         e_outer = Extrusion(outer_circle, self.thickness)
         self.add_operation(e_outer)
 
         # Create inner circle
         inner_circle = Circle(s.origin, self.inner_radius)
-        
+
         # Extrude the inner circle with cut=True to create the hole
         e_inner = Extrusion(inner_circle, self.thickness, cut=True)
         self.add_operation(e_inner)
+
 
 class DIN125Washer(Washer):
     DIN_SPECS = {
@@ -62,6 +64,7 @@ class DIN125Washer(Washer):
 
         # Store additional attributes specific to DIN125Washer
         self.size = size
+
 
 if __name__ == "__main__":
     show(DIN125Washer(size="M6"))
