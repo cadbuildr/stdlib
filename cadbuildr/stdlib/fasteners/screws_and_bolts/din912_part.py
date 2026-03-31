@@ -1,16 +1,5 @@
-from cadbuildr.foundation import (
-    Helix3D,
-    Sweep,
-    Part,
-    Sketch,
-    Axis,
-    Line,
-    Extrusion,
-    Point,
-    Lathe,
-    show,
-    Point3D,
-)
+from cadbuildr.foundation import Part, Sketch, Axis, Line, Extrusion, Point, Lathe, Point3D, Thread
+from typing import ClassVar
 import math
 
 
@@ -93,17 +82,16 @@ class Screw(Part):
 
         thread_radius = self.body_radius - H / 4
 
-        path = Helix3D(
-            self.thread_pitch,
-            thread_height - self.thread_pitch,
-            thread_radius,
+        profile = self.get_thread_profile(self.thread_pitch)
+        thread = Thread(
+            profile=profile,
+            pitch=self.thread_pitch,
+            height=thread_height - self.thread_pitch,
+            radius=thread_radius,
             center=Point3D(0, 0, self.thread_pitch / 2),
             dir=Point3D(0, 0, 1),
         )
-
-        profile = self.get_thread_profile(self.thread_pitch)
-        sweep = Sweep(profile, path)
-        self.add_operation(sweep)
+        self.add_operation(thread)
 
     def get_thread_profile(self, pitch):
         """https://en.wikipedia.org/wiki/Screw_thread#/media/File:ISO_and_UTS_Thread_Dimensions.svg"""
@@ -122,7 +110,7 @@ class Screw(Part):
 # Define the DIN912Screw class
 class DIN912Screw(Screw):
     # Class constant: dimension table
-    dimension_table = {
+    dimension_table: ClassVar[dict[str, dict[str, float]]] = {
         "M3": {
             "head_diameter": 5.5,
             "head_height": 3,
@@ -229,7 +217,3 @@ class DIN912Screw(Screw):
         # Store additional attributes specific to DIN912Screw
         self.size = size
         self.length = length
-
-
-if __name__ == "__main__":
-    show(DIN912Screw(size="M6", length=20, with_thread=True))

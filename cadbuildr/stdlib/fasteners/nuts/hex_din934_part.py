@@ -1,4 +1,5 @@
 from cadbuildr.foundation import *
+from typing import ClassVar
 import math
 
 
@@ -18,7 +19,7 @@ class HexNut(Part):
             self.add_thread()
         self.paint("grey")
 
-    dimension_table = {
+    dimension_table: ClassVar[dict[str, dict[str, float]]] = {
         "M3": {
             "width_across_flats": 5.5,
             "thickness": 2.4,
@@ -116,17 +117,16 @@ class HexNut(Part):
         H = self.thread_pitch * math.sqrt(3) / 2
         thread_radius = self.nominal_diameter / 2 + H / 4
 
-        path = Helix3D(
-            self.thread_pitch,
-            thread_height - self.thread_pitch,
-            thread_radius,
+        profile = self.get_thread_profile(self.thread_pitch)
+        thread = Thread(
+            profile=profile,
+            pitch=self.thread_pitch,
+            height=thread_height - self.thread_pitch,
+            radius=thread_radius,
             center=Point3D(0, 0, self.thread_pitch / 2),
             dir=Point3D(0, 0, 1),
         )
-
-        profile = self.get_thread_profile(self.thread_pitch)
-        sweep = Sweep(profile, path)
-        self.add_operation(sweep)
+        self.add_operation(thread)
 
     def get_thread_profile(self, pitch):
         H = pitch * math.sqrt(3) / 2
@@ -137,7 +137,3 @@ class HexNut(Part):
         s.pencil.line_to(0, pitch / 2 - pitch / 16)
         profile = s.pencil.close()
         return profile
-
-
-if __name__ == "__main__":
-    show(HexNut(size="M6", with_thread=True))

@@ -1,4 +1,5 @@
-from cadbuildr.foundation import Part, Sketch, Circle, Extrusion, show
+from cadbuildr.foundation import Part, Sketch, Circle, Extrusion
+from typing import ClassVar
 
 
 class Washer(Part):
@@ -28,7 +29,7 @@ class Washer(Part):
 
 
 class DIN125Washer(Washer):
-    DIN_SPECS = {
+    DIN_SPECS: ClassVar[dict[str, dict[str, float]]] = {
         "M1.6": {"outer_diameter": 4, "inner_radius": 1.7 / 2, "thickness": 0.3},
         "M2": {"outer_diameter": 5, "inner_radius": 2.2 / 2, "thickness": 0.3},
         "M2.5": {"outer_diameter": 6, "inner_radius": 2.7 / 2, "thickness": 0.5},
@@ -64,7 +65,3 @@ class DIN125Washer(Washer):
 
         # Store additional attributes specific to DIN125Washer
         self.size = size
-
-
-if __name__ == "__main__":
-    show(DIN125Washer(size="M6"))

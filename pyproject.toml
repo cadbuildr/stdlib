@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cadbuildr-stdlib"
-version = "0.0.0.2"
+version = "0.0.0.3"
 description = "Standard library for cadbuildr with tools, parts, assemblies built on top of foundation"
 authors = ["Cadbuildr Team"]
 packages = [
@@ -10,9 +10,9 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.10"
-cadbuildr-foundation = "^0.0.0.14"
+cadbuildr-foundation = "^0.2.4"
 
 [tool.cadbuildr.dependencies]
-cadbuildr-foundation = "^0.0.0.14"
+cadbuildr-foundation = "^0.2.4"
 
 

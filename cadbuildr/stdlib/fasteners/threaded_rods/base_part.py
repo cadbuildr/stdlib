@@ -1,16 +1,11 @@
-# %%
 from cadbuildr.foundation import (
     Part,
     Sketch,
     Point,
-    Circle,
-    Extrusion,
-    show,
     Axis,
     Line,
     Lathe,
-    Sweep,
-    Helix3D,
+    Thread,
     Point3D,
 )
 import math
@@ -43,7 +38,6 @@ class ThreadedRod(Part):
         self.add_operation(Lathe(shape, axis))
 
     def add_thread(self):
-        # TODO simplify once threads are available in the foundation lib.
         thread_height = self.length
         H = self.thread_pitch * math.sqrt(3) / 2
 
@@ -57,18 +51,12 @@ class ThreadedRod(Part):
 
         profile = s.pencil.close()
 
-        path = Helix3D(
-            self.thread_pitch,
-            thread_height - self.thread_pitch,
-            thread_radius,
+        thread = Thread(
+            profile=profile,
+            pitch=self.thread_pitch,
+            height=thread_height - self.thread_pitch,
+            radius=thread_radius,
             center=Point3D(0, 0, self.thread_pitch / 2),
             dir=Point3D(0, 0, 1),
         )
-
-        sweep = Sweep(profile, path)
-        self.add_operation(sweep)
-
-
-if __name__ == "__main__":
-    show(ThreadedRod(diameter=5, length=30, thread_pitch=1.5, with_thread=True))
-# %%
+        self.add_operation(thread)

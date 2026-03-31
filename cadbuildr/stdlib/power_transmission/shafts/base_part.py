@@ -1,5 +1,4 @@
-# %%
-from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, show
+from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion
 
 
 class Shaft(Part):
@@ -14,8 +13,3 @@ class Shaft(Part):
         circle = Circle(center, self.DIAMETER / 2)
         extrusion = Extrusion(circle, self.LENGTH)
         self.add_operation(extrusion)
-
-
-if __name__ == "__main__":
-    show(Shaft())
-# %%
