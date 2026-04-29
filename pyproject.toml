@@ -10,9 +10,9 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.10"
-cadbuildr-foundation = "^0.2.4"
+cadbuildr-foundation = "^0.2.6"
 
 [tool.cadbuildr.dependencies]
-cadbuildr-foundation = "^0.2.4"
+cadbuildr-foundation = "^0.2.6"
 
 
