@@ -1,4 +1,5 @@
 from cadbuildr.foundation import Part, Sketch, Circle, Extrusion
+from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
 from typing import ClassVar
 
 
@@ -28,6 +29,19 @@ class Washer(Part):
         self.add_operation(e_inner)
 
 
+@catalog_part(
+    id="din125-flat-washer",
+    category="Fasteners",
+    subcategory="Washers",
+    name="Flat Washer",
+    standard="DIN 125 / ISO 7089",
+    description="Plain flat washer that spreads load under a bolt head or nut.",
+    params=[
+        ParamSpec.enum("size", choices=["M1.6", "M2", "M2.5", "M3", "M4", "M5", "M6", "M7", "M8", "M10", "M12", "M14", "M16", "M18", "M20", "M22", "M24"], default="M6"),
+    ],
+    featured=False,
+    example_config={"size": "M8"},
+)
 class DIN125Washer(Washer):
     DIN_SPECS: ClassVar[dict[str, dict[str, float]]] = {
         "M1.6": {"outer_diameter": 4, "inner_radius": 1.7 / 2, "thickness": 0.3},

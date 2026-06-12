@@ -8,9 +8,26 @@ from cadbuildr.foundation import (
     Thread,
     Point3D,
 )
+from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
 import math
 
 
+@catalog_part(
+    id="threaded-rod-generic",
+    category="Fasteners",
+    subcategory="Threaded Rods",
+    name="Threaded Rod (generic)",
+    standard="DIN 975 / ISO 4042",
+    description="Fully-threaded metric rod; set the diameter, length and pitch directly.",
+    params=[
+        ParamSpec.number("diameter", min=3, max=24, default=8, step=1),
+        ParamSpec.number("length", min=20, max=300, default=80, step=5),
+        ParamSpec.number("thread_pitch", min=0.5, max=3, default=1.25, step=0.05),
+        ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
+    ],
+    featured=False,
+    example_config={"diameter": 8, "length": 80, "thread_pitch": 1.25},
+)
 class ThreadedRod(Part):
     def __init__(self, diameter, length, thread_pitch=1.25, with_thread=True):
         self.diameter = diameter

@@ -1,4 +1,5 @@
 from cadbuildr.foundation import Part, Sketch, Axis, Line, Extrusion, Point, Lathe, Point3D, Thread
+from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
 from typing import ClassVar
 import math
 
@@ -108,6 +109,21 @@ class Screw(Part):
 
 
 # Define the DIN912Screw class
+@catalog_part(
+    id="din912-socket-cap-screw",
+    category="Fasteners",
+    subcategory="Screws & Bolts",
+    name="Socket Head Cap Screw",
+    standard="DIN 912 / ISO 4762",
+    description="Hex-socket (Allen) cap-head screw with a modeled ISO metric thread.",
+    params=[
+        ParamSpec.enum("size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12", "M14", "M16", "M20", "M24"], default="M6"),
+        ParamSpec.number("length", min=6, max=80, default=20, step=1),
+        ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
+    ],
+    featured=True,
+    example_config={"size": "M8", "length": 30},
+)
 class DIN912Screw(Screw):
     # Class constant: dimension table
     dimension_table: ClassVar[dict[str, dict[str, float]]] = {

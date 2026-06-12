@@ -1,8 +1,23 @@
 from cadbuildr.foundation import *
+from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
 from typing import ClassVar
 import math
 
 
+@catalog_part(
+    id="din934-hex-nut",
+    category="Fasteners",
+    subcategory="Nuts",
+    name="Hex Nut",
+    standard="DIN 934 / ISO 4032",
+    description="Standard metric hexagonal nut with a modeled ISO thread.",
+    params=[
+        ParamSpec.enum("size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12", "M14", "M16", "M20", "M24"], default="M6"),
+        ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
+    ],
+    featured=True,
+    example_config={"size": "M8"},
+)
 class HexNut(Part):
     def __init__(self, size, with_thread=True):
         self.size = size

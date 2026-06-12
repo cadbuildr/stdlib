@@ -1,8 +1,10 @@
 [tool.poetry]
 name = "cadbuildr-stdlib"
-version = "0.0.0.3"
+version = "0.1.0"
 description = "Standard library for cadbuildr with tools, parts, assemblies built on top of foundation"
 authors = ["Cadbuildr Team"]
+readme = "README.md"
+license = "MIT"
 packages = [
     { include = "cadbuildr" }
 ]
@@ -10,9 +12,17 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.10"
-cadbuildr-foundation = "^0.2.6"
+cadbuildr-foundation = "^0.2.12"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8"
 
 [tool.cadbuildr.dependencies]
-cadbuildr-foundation = "^0.2.6"
+cadbuildr-foundation = "^0.2.12"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
