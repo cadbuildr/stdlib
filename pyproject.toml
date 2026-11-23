@@ -1,28 +1,38 @@
-[tool.poetry]
+[project]
 name = "cadbuildr-stdlib"
-version = "0.1.0"
+version = "0.4.0"
 description = "Standard library for cadbuildr with tools, parts, assemblies built on top of foundation"
-authors = ["Cadbuildr Team"]
-readme = "README.md"
-license = "MIT"
+requires-python = ">=3.10.0,<4.0.0"
+authors = [
+    {name = "Cadbuildr Team"},
+]
+dependencies = [
+    "cadbuildr-foundation>=0.2.19,<0.3.0",
+]
+
+[tool.cadbuildr.dependencies]
+cadbuildr-foundation = "^0.2.19"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    # check_interference(exact=True) in tests/test_exact_interference.py
+    "cadbuildr-foundation[exact]",
+]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
+
+[tool.hatch.build.targets.wheel]
 packages = [
-    { include = "cadbuildr" }
+    "cadbuildr",
 ]
 
 
-[tool.poetry.dependencies]
-python = "^3.10"
-cadbuildr-foundation = "^0.2.12"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8"
-
-[tool.cadbuildr.dependencies]
-cadbuildr-foundation = "^0.2.12"
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = [
+    "hatchling>=1.27.0",
+]
+build-backend = "hatchling.build"

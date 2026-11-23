@@ -1,10 +1,20 @@
-from cadbuildr.foundation import Part, Sketch, Axis, Line, Extrusion, Point, Lathe, Point3D, Thread
+from cadbuildr.foundation import (
+    Sketch,
+    Axis,
+    Line,
+    Extrusion,
+    Point,
+    Lathe,
+    Point3D,
+    Thread,
+)
+from cadbuildr.stdlib.fasteners.base import Fastener
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
 from typing import ClassVar
 import math
 
 
-class Screw(Part):
+class Screw(Fastener):
     def __init__(
         self,
         head_radius=10,
@@ -31,6 +41,9 @@ class Screw(Part):
         if with_thread:
             self.add_thread()
         self.paint("grey")
+
+        # Fastener contract: under-head seat at the top of the shank.
+        self._set_fastener_contract(body_radius=body_radius, body_height=body_height)
 
     def get_body_sketch(self):
         s = Sketch(self.xz())
@@ -117,8 +130,26 @@ class Screw(Part):
     standard="DIN 912 / ISO 4762",
     description="Hex-socket (Allen) cap-head screw with a modeled ISO metric thread.",
     params=[
-        ParamSpec.enum("size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12", "M14", "M16", "M20", "M24"], default="M6"),
-        ParamSpec.number("length", min=6, max=80, default=20, step=1),
+        ParamSpec.enum(
+            "size",
+            choices=[
+                "M2",
+                "M2.5",
+                "M3",
+                "M4",
+                "M5",
+                "M6",
+                "M8",
+                "M10",
+                "M12",
+                "M14",
+                "M16",
+                "M20",
+                "M24",
+            ],
+            default="M6",
+        ),
+        ParamSpec.number("length", min=3, max=80, default=20, step=1),
         ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
     ],
     featured=True,
@@ -126,7 +157,23 @@ class Screw(Part):
 )
 class DIN912Screw(Screw):
     # Class constant: dimension table
+    # ISO 4762: head_diameter = dk, head_height = k, hexagon_width = s,
+    # hexagon_depth = t (min socket depth).
     dimension_table: ClassVar[dict[str, dict[str, float]]] = {
+        "M2": {
+            "head_diameter": 3.8,
+            "head_height": 2.0,
+            "hexagon_width": 1.5,
+            "hexagon_depth": 1.0,
+            "thread_pitch": 0.4,
+        },
+        "M2.5": {
+            "head_diameter": 4.5,
+            "head_height": 2.5,
+            "hexagon_width": 2.0,
+            "hexagon_depth": 1.1,
+            "thread_pitch": 0.45,
+        },
         "M3": {
             "head_diameter": 5.5,
             "head_height": 3,
@@ -223,7 +270,8 @@ class DIN912Screw(Screw):
             head_radius=dimensions["head_diameter"] / 2,
             head_height=dimensions["head_height"],
             body_radius=body_diameter / 2,
-            body_height=length - dimensions["head_height"],
+            # ISO 4762 nominal length is measured under the head.
+            body_height=length,
             hexagon_width=dimensions["hexagon_width"],
             hexagon_depth=dimensions["hexagon_depth"],
             thread_pitch=dimensions["thread_pitch"],

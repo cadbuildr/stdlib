@@ -3,13 +3,14 @@
 import math
 from typing import ClassVar
 
-from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion
+from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
 from cadbuildr.stdlib.common import (
     BRASS,
     STAINLESS,
     add_external_thread,
     add_internal_thread,
+    add_axial_anchors,
 )
 
 
@@ -43,6 +44,10 @@ class LeadScrewT8(Part):
         )
         if with_thread:
             add_external_thread(self, radius=radius, length=length, pitch=_T8_PITCH)
+        # Anchors: end faces + axis. ``end_a`` mates onto a coupling's
+        # ``bore_b_stop``; a LeadScrewNutT8 rides ``axis`` (ScrewJoint, pitch 2).
+        self.radius, self.pitch = radius, _T8_PITCH
+        add_axial_anchors(self, length, ends=("end_a", "end_b"))
         self.paint(STAINLESS)
 
 
@@ -64,28 +69,57 @@ class LeadScrewNutT8(Part):
     FLANGE_H: ClassVar[float] = 3.5
     BODY_D: ClassVar[float] = 10.2
     BODY_H: ClassVar[float] = 11.5
-    HOLE_PCD: ClassVar[float] = 16.0   # pitch circle of the flange holes
+    HOLE_PCD: ClassVar[float] = 16.0  # pitch circle of the flange holes
     HOLE_D: ClassVar[float] = 4.2
 
     def __init__(self, with_thread=True):
         total_h = self.FLANGE_H + self.BODY_H
         # Flange + body.
         self.add_operation(
-            Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), self.FLANGE_D / 2), 0, self.FLANGE_H)
+            Extrusion(
+                Circle(Point(Sketch(self.xy()), 0, 0), self.FLANGE_D / 2),
+                0,
+                self.FLANGE_H,
+            )
         )
         self.add_operation(
-            Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), self.BODY_D / 2), self.FLANGE_H, total_h)
+            Extrusion(
+                Circle(Point(Sketch(self.xy()), 0, 0), self.BODY_D / 2),
+                self.FLANGE_H,
+                total_h,
+            )
         )
         # Central bore + thread.
         self.add_operation(
-            Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), _T8_MAJOR / 2), 0, total_h, cut=True)
+            Extrusion(
+                Circle(Point(Sketch(self.xy()), 0, 0), _T8_MAJOR / 2),
+                0,
+                total_h,
+                cut=True,
+            )
         )
         if with_thread:
-            add_internal_thread(self, nominal_radius=_T8_MAJOR / 2, length=total_h, pitch=_T8_PITCH)
+            add_internal_thread(
+                self, nominal_radius=_T8_MAJOR / 2, length=total_h, pitch=_T8_PITCH
+            )
         # Four flange mounting holes.
         r = self.HOLE_PCD / 2
         for i in range(4):
             a = math.radians(45 + 90 * i)
             c = Point(Sketch(self.xy()), r * math.cos(a), r * math.sin(a))
-            self.add_operation(Extrusion(Circle(c, self.HOLE_D / 2), 0, self.FLANGE_H, cut=True))
+            self.add_operation(
+                Extrusion(Circle(c, self.HOLE_D / 2), 0, self.FLANGE_H, cut=True)
+            )
+        # Anchors: flange underside (bottom), body top (top), axis, the
+        # flange shoulder the carriage plate sits on (``flange_seat``) and
+        # one ``mount_hole_<i>`` per flange hole on that shoulder.
+        add_axial_anchors(self, total_h)
+        self.add_anchor(make_anchor("flange_seat", (0.0, 0.0, self.FLANGE_H)))
+        for i in range(4):
+            a = math.radians(45 + 90 * i)
+            self.add_anchor(
+                make_anchor(
+                    f"mount_hole_{i}", (r * math.cos(a), r * math.sin(a), self.FLANGE_H)
+                )
+            )
         self.paint(BRASS)

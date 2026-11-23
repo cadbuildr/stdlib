@@ -2,13 +2,13 @@
 
 import math
 
-from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion
+from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
-from cadbuildr.stdlib.common import ALUMINIUM
+from cadbuildr.stdlib.common import ALUMINIUM, add_axial_anchors
 
-_GT2_PITCH = 2.0      # mm, belt tooth pitch
-_FLANGE_T = 1.0       # flange thickness
-_FLANGE_EXTRA = 2.0   # flange radius beyond pitch radius
+_GT2_PITCH = 2.0  # mm, belt tooth pitch
+_FLANGE_T = 1.0  # flange thickness
+_FLANGE_EXTRA = 2.0  # flange radius beyond pitch radius
 
 
 @catalog_part(
@@ -36,17 +36,35 @@ class GT2Pulley(Part):
         top = body_z1 + _FLANGE_T
 
         # Bottom flange, toothed body, top flange.
-        self.add_operation(Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), flange_r), 0, body_z0))
-        self.add_operation(Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), pitch_r), body_z0, body_z1))
-        self.add_operation(Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), flange_r), body_z1, top))
+        self.add_operation(
+            Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), flange_r), 0, body_z0)
+        )
+        self.add_operation(
+            Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), pitch_r), body_z0, body_z1)
+        )
+        self.add_operation(
+            Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), flange_r), body_z1, top)
+        )
 
         # Tooth grooves: small scallops cut at the pitch radius around the body.
         tooth_r = _GT2_PITCH * 0.27
         for i in range(self.teeth):
             a = 2 * math.pi * i / self.teeth
             c = Point(Sketch(self.xy()), pitch_r * math.cos(a), pitch_r * math.sin(a))
-            self.add_operation(Extrusion(Circle(c, tooth_r), body_z0, body_z1, cut=True))
+            self.add_operation(
+                Extrusion(Circle(c, tooth_r), body_z0, body_z1, cut=True)
+            )
 
         # Central bore.
-        self.add_operation(Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), bore / 2), 0, top, cut=True))
+        self.add_operation(
+            Extrusion(
+                Circle(Point(Sketch(self.xy()), 0, 0), bore / 2), 0, top, cut=True
+            )
+        )
+        # Anchors: both flange faces, bore axis, and the belt plane (centre of
+        # the toothed band, +Z along the axis) for aligning belts / idlers.
+        self.pitch_radius = pitch_r
+        self.height = top
+        add_axial_anchors(self, top)
+        self.add_anchor(make_anchor("belt_plane", (0.0, 0.0, (body_z0 + body_z1) / 2)))
         self.paint(ALUMINIUM)

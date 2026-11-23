@@ -3,7 +3,7 @@
 import math
 from typing import ClassVar
 
-from cadbuildr.foundation import Part, Sketch, Axis, Line, Point, Lathe, Extrusion
+from cadbuildr.foundation import Sketch, Axis, Line, Point, Lathe, Extrusion
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
 from cadbuildr.stdlib.common import (
     ISO_COARSE_PITCH,
@@ -11,6 +11,7 @@ from cadbuildr.stdlib.common import (
     hexagon_shape,
     add_external_thread,
 )
+from cadbuildr.stdlib.fasteners.base import Fastener
 
 
 @catalog_part(
@@ -21,15 +22,19 @@ from cadbuildr.stdlib.common import (
     standard="DIN 933 / 931 · ISO 4017 / 4014",
     description="Hexagonal-head bolt. Fully threaded by default; set a grip length for a DIN 931 partial thread.",
     params=[
-        ParamSpec.enum("size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M8"),
+        ParamSpec.enum(
+            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M8"
+        ),
         ParamSpec.number("length", min=8, max=80, default=30, step=1),
-        ParamSpec.number("grip_length", min=0, max=40, default=0, step=1, label="Unthreaded grip"),
+        ParamSpec.number(
+            "grip_length", min=0, max=40, default=0, step=1, label="Unthreaded grip"
+        ),
         ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
     ],
     featured=True,
     example_config={"size": "M8", "length": 35, "grip_length": 12},
 )
-class HexBolt(Part):
+class HexBolt(Fastener):
     # width across flats (mm) and head height k (mm), ISO 4017/4014.
     HEAD_TABLE: ClassVar[dict[str, dict[str, float]]] = {
         "M3": {"waf": 5.5, "k": 2.0},
@@ -63,6 +68,8 @@ class HexBolt(Part):
             add_external_thread(
                 self, radius=self.radius, length=self.thread_length, pitch=self.pitch
             )
+        self.head_radius = self.waf / 2
+        self._set_fastener_contract(body_radius=self.radius, body_height=self.length)
         self.paint("grey")
 
     def _build_shank(self):

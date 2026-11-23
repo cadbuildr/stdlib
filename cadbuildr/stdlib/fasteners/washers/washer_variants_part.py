@@ -4,7 +4,7 @@ from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Extrusion
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
-from cadbuildr.stdlib.common import lathe_revolve
+from cadbuildr.stdlib.common import lathe_revolve, add_axial_anchors
 from cadbuildr.stdlib.fasteners.washers.din125_part import Washer
 
 
@@ -16,7 +16,9 @@ from cadbuildr.stdlib.fasteners.washers.din125_part import Washer
     standard="DIN 127 B",
     description="Square-section spring ring with a radial split that bites into the joint to resist loosening.",
     params=[
-        ParamSpec.enum("size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"),
+        ParamSpec.enum(
+            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
+        ),
     ],
     featured=False,
     example_config={"size": "M6"},
@@ -39,6 +41,9 @@ class SplitLockWasher(Part):
         # Square-section annulus revolved into a flat ring.
         lathe_revolve(self, [(ri, 0), (ro, 0), (ro, s), (ri, s), (ri, 0)])
         self._cut_split(ri, ro, s)
+        # Anchors: both faces + bore axis (flat model; spring twist not modeled).
+        self.inner_radius, self.outer_radius, self.thickness = ri, ro, s
+        add_axial_anchors(self, s)
         self.paint("grey")
         self.size = size
 
@@ -63,7 +68,9 @@ class SplitLockWasher(Part):
     standard="DIN 9021 / ISO 7093",
     description="Oversized-OD flat washer that spreads load over a wide area (~3× the bolt diameter).",
     params=[
-        ParamSpec.enum("size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"),
+        ParamSpec.enum(
+            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
+        ),
     ],
     featured=False,
     example_config={"size": "M6"},

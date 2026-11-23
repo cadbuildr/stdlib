@@ -9,6 +9,7 @@ from cadbuildr.foundation import (
     Point3D,
 )
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.stdlib.common import add_axial_anchors
 import math
 
 
@@ -39,6 +40,9 @@ class ThreadedRod(Part):
 
         if with_thread:
             self.add_thread()
+        # Anchors: end faces + axis (nuts mate on the ends or slide on axis).
+        self.radius = diameter / 2
+        add_axial_anchors(self, length, ends=("end_a", "end_b"))
 
     def create_body(self):
         s = Sketch(self.xz())

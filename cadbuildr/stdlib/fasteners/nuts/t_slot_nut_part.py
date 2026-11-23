@@ -2,9 +2,13 @@
 
 from typing import ClassVar
 
-from cadbuildr.foundation import Part, Sketch, Circle, Extrusion
+from cadbuildr.foundation import Part, Sketch, Circle, Extrusion, make_anchor
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
-from cadbuildr.stdlib.common import rectangle_shape, add_internal_thread
+from cadbuildr.stdlib.common import (
+    rectangle_shape,
+    add_internal_thread,
+    add_axial_anchors,
+)
 
 
 @catalog_part(
@@ -22,9 +26,9 @@ from cadbuildr.stdlib.common import rectangle_shape, add_internal_thread
 )
 class TSlotNut(Part):
     # Geometry of the 6 mm slot interface (mm), shared by all thread sizes.
-    FLANGE_W: ClassVar[float] = 10.0   # across the slot, catches under the lips
-    NECK_W: ClassVar[float] = 5.8      # passes through the 6 mm opening
-    LENGTH: ClassVar[float] = 6.0      # along the slot
+    FLANGE_W: ClassVar[float] = 10.0  # across the slot, catches under the lips
+    NECK_W: ClassVar[float] = 5.8  # passes through the 6 mm opening
+    LENGTH: ClassVar[float] = 6.0  # along the slot
     FLANGE_H: ClassVar[float] = 1.6
     NECK_H: ClassVar[float] = 1.6
     PITCH: ClassVar[dict[str, float]] = {"M3": 0.5, "M4": 0.7, "M5": 0.8, "M6": 1.0}
@@ -43,6 +47,14 @@ class TSlotNut(Part):
         bore = Circle(Sketch(self.xy()).origin, nominal / 2)
         self.add_operation(Extrusion(bore, 0, total_h, cut=True))
         if with_thread:
-            add_internal_thread(self, nominal_radius=nominal / 2, length=total_h, pitch=self.PITCH[size])
+            add_internal_thread(
+                self, nominal_radius=nominal / 2, length=total_h, pitch=self.PITCH[size]
+            )
+        # Anchors: flange underside (bottom), neck top (top, flush with the
+        # extrusion face — mate it on an AluExtrusion slot anchor), the
+        # flange shoulder that bears under the slot lips, and the bore axis.
+        self.thickness = total_h
+        add_axial_anchors(self, total_h)
+        self.add_anchor(make_anchor("flange_seat", (0.0, 0.0, self.FLANGE_H)))
         self.paint("grey")
         self.size = size

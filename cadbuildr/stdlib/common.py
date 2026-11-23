@@ -19,6 +19,7 @@ from cadbuildr.foundation import (
     Axis,
     Line,
     Lathe,
+    make_anchor,
 )
 
 
@@ -84,7 +85,9 @@ def rectangle_shape(sketch: Sketch, width: float, length: float):
     return sketch.pencil.close()
 
 
-def oriented_rectangle_shape(sketch: Sketch, cx: float, cy: float, w: float, l: float, angle: float):
+def oriented_rectangle_shape(
+    sketch: Sketch, cx: float, cy: float, w: float, l: float, angle: float
+):
     """Closed rectangle of size ``w`` × ``l`` centred at (cx, cy) and rotated by ``angle`` rad."""
     ca, sa = math.cos(angle), math.sin(angle)
     corners = [(-w / 2, -l / 2), (w / 2, -l / 2), (w / 2, l / 2), (-w / 2, l / 2)]
@@ -95,7 +98,9 @@ def oriented_rectangle_shape(sketch: Sketch, cx: float, cy: float, w: float, l: 
     return sketch.pencil.close()
 
 
-def add_screwdriver_slot(part, *, top_z: float, across: float, width: float, depth: float):
+def add_screwdriver_slot(
+    part, *, top_z: float, across: float, width: float, depth: float
+):
     """Cut a straight screwdriver slot into the top of a head (for slotted screws)."""
     slot = rectangle_shape(Sketch(part.xy()), width, across)
     part.add_operation(Extrusion(slot, top_z - depth, top_z, cut=True))
@@ -178,3 +183,32 @@ def add_internal_thread(part, *, nominal_radius: float, length: float, pitch: fl
             dir=Point3D(0, 0, 1),
         )
     )
+
+
+# --------------------------------------------------------------------------- #
+# Mate anchors
+#
+# Convention for every stdlib part: an anchor's +Z is the OUTWARD normal of the
+# face it sits on (so the default face-to-face joint, ``flip=True``, brings two
+# faces into contact), or the part's own axis direction for ``axis``-style
+# anchors. Rotational parts are built along +Z from z=0.
+# --------------------------------------------------------------------------- #
+
+
+def add_axial_anchors(part, length, *, ends=("bottom", "top"), axis="axis"):
+    """Standard anchors for a body built along +Z from 0 to ``length``.
+
+    * ``ends[0]`` — the z=0 face, outward normal -Z.
+    * ``ends[1]`` — the z=``length`` face, outward normal +Z.
+    * ``axis`` — at the origin, +Z along the part axis (for revolute /
+      slider / cylindrical joints along the bore or shaft).
+
+    Flat parts (nuts, washers, bearings, gears) use ``bottom``/``top``;
+    long parts (rods, shafts, extrusions) use ``end_a``/``end_b`` like
+    :class:`~cadbuildr.stdlib.profiles.tubes.round_tube_part.RoundTube`.
+    """
+    bottom, top = ends
+    part.add_anchor(make_anchor(bottom, (0.0, 0.0, 0.0), z_down=True))
+    part.add_anchor(make_anchor(top, (0.0, 0.0, float(length))))
+    if axis:
+        part.add_anchor(make_anchor(axis, (0.0, 0.0, 0.0)))

@@ -3,7 +3,6 @@
 import math
 from typing import ClassVar
 
-from cadbuildr.foundation import Part
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
 from cadbuildr.stdlib.common import (
     ISO_COARSE_PITCH,
@@ -12,6 +11,7 @@ from cadbuildr.stdlib.common import (
     add_hex_socket,
     lathe_revolve,
 )
+from cadbuildr.stdlib.fasteners.base import Fastener
 
 
 def _core_radius(radius: float, pitch: float, with_thread: bool) -> float:
@@ -27,14 +27,16 @@ def _core_radius(radius: float, pitch: float, with_thread: bool) -> float:
     standard="DIN 7991 / ISO 10642",
     description="Flat 90° countersunk head with a hex (Allen) socket — sits flush with the surface.",
     params=[
-        ParamSpec.enum("size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"),
+        ParamSpec.enum(
+            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
+        ),
         ParamSpec.number("length", min=6, max=60, default=20, step=1),
         ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
     ],
     featured=True,
     example_config={"size": "M6", "length": 20},
 )
-class CountersunkSocketScrew(Part):
+class CountersunkSocketScrew(Fastener):
     # dk = head diameter, k = head height, s = socket width across flats, t = socket depth
     TABLE: ClassVar[dict[str, dict[str, float]]] = {
         "M3": {"dk": 6.0, "k": 1.7, "s": 2.0, "t": 1.1},
@@ -64,6 +66,9 @@ class CountersunkSocketScrew(Part):
         add_hex_socket(self, top_z=length, width=d["s"], depth=d["t"])
         if with_thread and (length - k) > pitch:
             add_external_thread(self, radius=radius, length=length - k, pitch=pitch)
+        # Countersunk: embeds fully, the seat is the flush head top.
+        self.head_radius, self.head_height = head_r, k
+        self._set_fastener_contract(body_radius=radius, body_height=length)
         self.size, self.length = size, length
         self.paint("grey")
 
@@ -76,14 +81,16 @@ class CountersunkSocketScrew(Part):
     standard="DIN 7380 / ISO 7380",
     description="Low domed head with a hex (Allen) socket — a rounded, low-profile alternative to the cap screw.",
     params=[
-        ParamSpec.enum("size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"),
+        ParamSpec.enum(
+            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
+        ),
         ParamSpec.number("length", min=6, max=60, default=20, step=1),
         ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
     ],
     featured=False,
     example_config={"size": "M6", "length": 16},
 )
-class ButtonHeadSocketScrew(Part):
+class ButtonHeadSocketScrew(Fastener):
     # dk = head diameter, k = head height, s = socket width across flats, t = socket depth
     TABLE: ClassVar[dict[str, dict[str, float]]] = {
         "M3": {"dk": 5.7, "k": 1.65, "s": 2.0, "t": 1.05},
@@ -116,5 +123,8 @@ class ButtonHeadSocketScrew(Part):
         add_hex_socket(self, top_z=length + k, width=d["s"], depth=d["t"])
         if with_thread and length > pitch:
             add_external_thread(self, radius=radius, length=length, pitch=pitch)
+        # Under-dome seat at the top of the shank.
+        self.head_radius, self.head_height = head_r, k
+        self._set_fastener_contract(body_radius=radius, body_height=length)
         self.size, self.length = size, length
         self.paint("grey")

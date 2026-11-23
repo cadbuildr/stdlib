@@ -7,6 +7,7 @@ from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
 from cadbuildr.stdlib.common import (
     rectangle_shape,
     add_internal_thread,
+    add_axial_anchors,
 )
 from cadbuildr.stdlib.fasteners.nuts.hex_din934_part import HexNut
 
@@ -19,7 +20,9 @@ from cadbuildr.stdlib.fasteners.nuts.hex_din934_part import HexNut
     standard="DIN 439 / ISO 4035",
     description="Reduced-height (jam) hex nut, used as a locknut or where clearance is tight.",
     params=[
-        ParamSpec.enum("size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"),
+        ParamSpec.enum(
+            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
+        ),
         ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
     ],
     featured=False,
@@ -27,13 +30,48 @@ from cadbuildr.stdlib.fasteners.nuts.hex_din934_part import HexNut
 )
 class ThinNut(HexNut):
     dimension_table: ClassVar[dict[str, dict[str, float]]] = {
-        "M3": {"width_across_flats": 5.5, "thickness": 1.8, "nominal_diameter": 3, "thread_pitch": 0.5},
-        "M4": {"width_across_flats": 7.0, "thickness": 2.2, "nominal_diameter": 4, "thread_pitch": 0.7},
-        "M5": {"width_across_flats": 8.0, "thickness": 2.7, "nominal_diameter": 5, "thread_pitch": 0.8},
-        "M6": {"width_across_flats": 10.0, "thickness": 3.2, "nominal_diameter": 6, "thread_pitch": 1.0},
-        "M8": {"width_across_flats": 13.0, "thickness": 4.0, "nominal_diameter": 8, "thread_pitch": 1.25},
-        "M10": {"width_across_flats": 17.0, "thickness": 5.0, "nominal_diameter": 10, "thread_pitch": 1.5},
-        "M12": {"width_across_flats": 19.0, "thickness": 6.0, "nominal_diameter": 12, "thread_pitch": 1.75},
+        "M3": {
+            "width_across_flats": 5.5,
+            "thickness": 1.8,
+            "nominal_diameter": 3,
+            "thread_pitch": 0.5,
+        },
+        "M4": {
+            "width_across_flats": 7.0,
+            "thickness": 2.2,
+            "nominal_diameter": 4,
+            "thread_pitch": 0.7,
+        },
+        "M5": {
+            "width_across_flats": 8.0,
+            "thickness": 2.7,
+            "nominal_diameter": 5,
+            "thread_pitch": 0.8,
+        },
+        "M6": {
+            "width_across_flats": 10.0,
+            "thickness": 3.2,
+            "nominal_diameter": 6,
+            "thread_pitch": 1.0,
+        },
+        "M8": {
+            "width_across_flats": 13.0,
+            "thickness": 4.0,
+            "nominal_diameter": 8,
+            "thread_pitch": 1.25,
+        },
+        "M10": {
+            "width_across_flats": 17.0,
+            "thickness": 5.0,
+            "nominal_diameter": 10,
+            "thread_pitch": 1.5,
+        },
+        "M12": {
+            "width_across_flats": 19.0,
+            "thickness": 6.0,
+            "nominal_diameter": 12,
+            "thread_pitch": 1.75,
+        },
     }
 
 
@@ -45,7 +83,9 @@ class ThinNut(HexNut):
     standard="DIN 985 / ISO 10511",
     description="Hex nut with a taller body carrying a nylon insert that resists loosening under vibration.",
     params=[
-        ParamSpec.enum("size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"),
+        ParamSpec.enum(
+            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
+        ),
         ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
     ],
     featured=False,
@@ -53,13 +93,48 @@ class ThinNut(HexNut):
 )
 class NylonLockNut(HexNut):
     dimension_table: ClassVar[dict[str, dict[str, float]]] = {
-        "M3": {"width_across_flats": 5.5, "thickness": 4.0, "nominal_diameter": 3, "thread_pitch": 0.5},
-        "M4": {"width_across_flats": 7.0, "thickness": 5.0, "nominal_diameter": 4, "thread_pitch": 0.7},
-        "M5": {"width_across_flats": 8.0, "thickness": 5.0, "nominal_diameter": 5, "thread_pitch": 0.8},
-        "M6": {"width_across_flats": 10.0, "thickness": 6.0, "nominal_diameter": 6, "thread_pitch": 1.0},
-        "M8": {"width_across_flats": 13.0, "thickness": 8.0, "nominal_diameter": 8, "thread_pitch": 1.25},
-        "M10": {"width_across_flats": 17.0, "thickness": 10.0, "nominal_diameter": 10, "thread_pitch": 1.5},
-        "M12": {"width_across_flats": 19.0, "thickness": 12.0, "nominal_diameter": 12, "thread_pitch": 1.75},
+        "M3": {
+            "width_across_flats": 5.5,
+            "thickness": 4.0,
+            "nominal_diameter": 3,
+            "thread_pitch": 0.5,
+        },
+        "M4": {
+            "width_across_flats": 7.0,
+            "thickness": 5.0,
+            "nominal_diameter": 4,
+            "thread_pitch": 0.7,
+        },
+        "M5": {
+            "width_across_flats": 8.0,
+            "thickness": 5.0,
+            "nominal_diameter": 5,
+            "thread_pitch": 0.8,
+        },
+        "M6": {
+            "width_across_flats": 10.0,
+            "thickness": 6.0,
+            "nominal_diameter": 6,
+            "thread_pitch": 1.0,
+        },
+        "M8": {
+            "width_across_flats": 13.0,
+            "thickness": 8.0,
+            "nominal_diameter": 8,
+            "thread_pitch": 1.25,
+        },
+        "M10": {
+            "width_across_flats": 17.0,
+            "thickness": 10.0,
+            "nominal_diameter": 10,
+            "thread_pitch": 1.5,
+        },
+        "M12": {
+            "width_across_flats": 19.0,
+            "thickness": 12.0,
+            "nominal_diameter": 12,
+            "thread_pitch": 1.75,
+        },
     }
 
 
@@ -72,8 +147,14 @@ class _BoredNut(Part):
         self.add_operation(Extrusion(bore, thickness, cut=True))
         if with_thread and thickness > thread_pitch:
             add_internal_thread(
-                self, nominal_radius=nominal_diameter / 2, length=thickness, pitch=thread_pitch
+                self,
+                nominal_radius=nominal_diameter / 2,
+                length=thickness,
+                pitch=thread_pitch,
             )
+        # Anchors: bearing faces (bottom/top of the body) + thread axis.
+        self.thickness = thickness
+        add_axial_anchors(self, thickness)
         self.paint("grey")
 
 
@@ -85,7 +166,9 @@ class _BoredNut(Part):
     standard="DIN 557",
     description="Four-flat square nut, often dropped into channels or held against a flat to stop it turning.",
     params=[
-        ParamSpec.enum("size", choices=["M4", "M5", "M6", "M8", "M10", "M12"], default="M6"),
+        ParamSpec.enum(
+            "size", choices=["M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
+        ),
         ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
     ],
     featured=False,
@@ -126,10 +209,38 @@ class SquareNut(_BoredNut):
 class WingNut(_BoredNut):
     # body_d = round body diameter, m = body thickness, wing_l/h/t = wing length/height/thickness
     TABLE: ClassVar[dict[str, dict[str, float]]] = {
-        "M4": {"body_d": 9.0, "m": 4.0, "wing_l": 9.0, "wing_h": 9.0, "wing_t": 1.6, "p": 0.7},
-        "M5": {"body_d": 11.0, "m": 5.0, "wing_l": 11.0, "wing_h": 11.0, "wing_t": 2.0, "p": 0.8},
-        "M6": {"body_d": 13.0, "m": 6.0, "wing_l": 13.0, "wing_h": 13.0, "wing_t": 2.5, "p": 1.0},
-        "M8": {"body_d": 16.0, "m": 7.0, "wing_l": 16.0, "wing_h": 15.0, "wing_t": 3.0, "p": 1.25},
+        "M4": {
+            "body_d": 9.0,
+            "m": 4.0,
+            "wing_l": 9.0,
+            "wing_h": 9.0,
+            "wing_t": 1.6,
+            "p": 0.7,
+        },
+        "M5": {
+            "body_d": 11.0,
+            "m": 5.0,
+            "wing_l": 11.0,
+            "wing_h": 11.0,
+            "wing_t": 2.0,
+            "p": 0.8,
+        },
+        "M6": {
+            "body_d": 13.0,
+            "m": 6.0,
+            "wing_l": 13.0,
+            "wing_h": 13.0,
+            "wing_t": 2.5,
+            "p": 1.0,
+        },
+        "M8": {
+            "body_d": 16.0,
+            "m": 7.0,
+            "wing_l": 16.0,
+            "wing_h": 15.0,
+            "wing_t": 3.0,
+            "p": 1.25,
+        },
     }
 
     def __init__(self, size, with_thread=True):

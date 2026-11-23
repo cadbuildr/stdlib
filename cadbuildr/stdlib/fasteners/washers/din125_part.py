@@ -1,5 +1,6 @@
 from cadbuildr.foundation import Part, Sketch, Circle, Extrusion
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.stdlib.common import add_axial_anchors
 from typing import ClassVar
 
 
@@ -10,6 +11,8 @@ class Washer(Part):
         self.thickness = thickness
 
         self.create_washer()
+        # Anchors: both faces + bore axis.
+        add_axial_anchors(self, self.thickness)
 
     def create_washer(self):
         s = Sketch(self.xy())
@@ -37,7 +40,29 @@ class Washer(Part):
     standard="DIN 125 / ISO 7089",
     description="Plain flat washer that spreads load under a bolt head or nut.",
     params=[
-        ParamSpec.enum("size", choices=["M1.6", "M2", "M2.5", "M3", "M4", "M5", "M6", "M7", "M8", "M10", "M12", "M14", "M16", "M18", "M20", "M22", "M24"], default="M6"),
+        ParamSpec.enum(
+            "size",
+            choices=[
+                "M1.6",
+                "M2",
+                "M2.5",
+                "M3",
+                "M4",
+                "M5",
+                "M6",
+                "M7",
+                "M8",
+                "M10",
+                "M12",
+                "M14",
+                "M16",
+                "M18",
+                "M20",
+                "M22",
+                "M24",
+            ],
+            default="M6",
+        ),
     ],
     featured=False,
     example_config={"size": "M8"},

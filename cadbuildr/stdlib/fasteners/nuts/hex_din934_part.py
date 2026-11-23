@@ -1,5 +1,6 @@
 from cadbuildr.foundation import *
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.stdlib.common import add_axial_anchors
 from typing import ClassVar
 import math
 
@@ -12,7 +13,25 @@ import math
     standard="DIN 934 / ISO 4032",
     description="Standard metric hexagonal nut with a modeled ISO thread.",
     params=[
-        ParamSpec.enum("size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12", "M14", "M16", "M20", "M24"], default="M6"),
+        ParamSpec.enum(
+            "size",
+            choices=[
+                "M2",
+                "M2.5",
+                "M3",
+                "M4",
+                "M5",
+                "M6",
+                "M8",
+                "M10",
+                "M12",
+                "M14",
+                "M16",
+                "M20",
+                "M24",
+            ],
+            default="M6",
+        ),
         ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
     ],
     featured=True,
@@ -32,9 +51,24 @@ class HexNut(Part):
         self.get_body_sketch()
         if self.with_thread:
             self.add_thread()
+        # Anchors: bearing faces (bottom/top) + thread axis.
+        add_axial_anchors(self, self.thickness)
         self.paint("grey")
 
+    # ISO 4032: width_across_flats = s, thickness = m (max).
     dimension_table: ClassVar[dict[str, dict[str, float]]] = {
+        "M2": {
+            "width_across_flats": 4.0,
+            "thickness": 1.6,
+            "nominal_diameter": 2,
+            "thread_pitch": 0.4,
+        },
+        "M2.5": {
+            "width_across_flats": 5.0,
+            "thickness": 2.0,
+            "nominal_diameter": 2.5,
+            "thread_pitch": 0.45,
+        },
         "M3": {
             "width_across_flats": 5.5,
             "thickness": 2.4,

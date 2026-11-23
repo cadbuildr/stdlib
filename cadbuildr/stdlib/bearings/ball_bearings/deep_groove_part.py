@@ -4,7 +4,7 @@ from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
-from cadbuildr.stdlib.common import STEEL, BLACK_OXIDE
+from cadbuildr.stdlib.common import STEEL, BLACK_OXIDE, add_axial_anchors
 
 
 @catalog_part(
@@ -15,7 +15,11 @@ from cadbuildr.stdlib.common import STEEL, BLACK_OXIDE
     standard="ISO 15 · 6xx / 68xx series",
     description="Shielded deep-groove ball bearing modeled as inner + outer races with a recessed shield face.",
     params=[
-        ParamSpec.enum("model", choices=["623", "624", "625", "626", "688", "608", "6800", "6801"], default="608"),
+        ParamSpec.enum(
+            "model",
+            choices=["623", "624", "625", "626", "688", "608", "6800", "6801"],
+            default="608",
+        ),
     ],
     featured=True,
     example_config={"model": "608"},
@@ -39,27 +43,42 @@ class DeepGrooveBearing(Part):
         b = self.TABLE[model]
         outer_r, bore_r, width = b["D"] / 2, b["d"] / 2, b["B"]
         # Race band geometry: rings occupy the outer/inner thirds, shield recessed between.
-        race = (outer_r - bore_r)
+        race = outer_r - bore_r
         outer_race_r = outer_r - race * 0.28
         inner_race_r = bore_r + race * 0.28
         shield_recess = min(0.6, width * 0.12)
 
         # Solid ring body.
-        self.add_operation(Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), outer_r), width))
-        self.add_operation(Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), bore_r), width, cut=True))
+        self.add_operation(
+            Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), outer_r), width)
+        )
+        self.add_operation(
+            Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), bore_r), width, cut=True)
+        )
 
         # Recess the shield band on both faces by cutting the mid annulus, then
         # refilling the inner core so the bore stays open.
         for z0, z1 in ((0, shield_recess), (width - shield_recess, width)):
             self.add_operation(
-                Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), outer_race_r), z0, z1, cut=True)
+                Extrusion(
+                    Circle(Point(Sketch(self.xy()), 0, 0), outer_race_r),
+                    z0,
+                    z1,
+                    cut=True,
+                )
             )
             self.add_operation(
                 Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), inner_race_r), z0, z1)
             )
             self.add_operation(
-                Extrusion(Circle(Point(Sketch(self.xy()), 0, 0), bore_r), z0, z1, cut=True)
+                Extrusion(
+                    Circle(Point(Sketch(self.xy()), 0, 0), bore_r), z0, z1, cut=True
+                )
             )
+        # Anchors: both ring faces + bore axis (``axis`` = the shaft line,
+        # for a RevoluteJoint / CylindricalJoint onto a shaft).
+        self.bore_radius, self.outer_radius, self.width = bore_r, outer_r, width
+        add_axial_anchors(self, width)
         self.paint(STEEL)
         self.shield_color = BLACK_OXIDE
         self.model = model

@@ -1,5 +1,6 @@
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.stdlib.common import add_axial_anchors
 
 
 @catalog_part(
@@ -21,6 +22,8 @@ class Shaft(Part):
         self.DIAMETER = diameter
         self.LENGTH = length
         self.create_shaft()
+        # Anchors: end faces + axis.
+        add_axial_anchors(self, length, ends=("end_a", "end_b"))
 
     def create_shaft(self):
         s = Sketch(self.xy())

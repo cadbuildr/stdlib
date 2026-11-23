@@ -2,9 +2,9 @@
 
 from typing import ClassVar
 
-from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion
+from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
-from cadbuildr.stdlib.common import BLACK_OXIDE
+from cadbuildr.stdlib.common import BLACK_OXIDE, add_axial_anchors
 
 
 @catalog_part(
@@ -15,7 +15,11 @@ from cadbuildr.stdlib.common import BLACK_OXIDE
     standard="LMxUU metric series",
     description="Closed-type linear ball bushing for round rod (LMxUU series sizing).",
     params=[
-        ParamSpec.enum("model", choices=["LM6UU", "LM8UU", "LM10UU", "LM12UU", "LM16UU"], default="LM8UU"),
+        ParamSpec.enum(
+            "model",
+            choices=["LM6UU", "LM8UU", "LM10UU", "LM12UU", "LM16UU"],
+            default="LM8UU",
+        ),
     ],
     featured=True,
     example_config={"model": "LM8UU"},
@@ -40,5 +44,10 @@ class LinearBearing(Part):
         self.add_operation(Extrusion(body, length))
         bore = Circle(Point(Sketch(self.xy()), 0, 0), bore_r)
         self.add_operation(Extrusion(bore, length, cut=True))
+        # Anchors: end faces, axis, and ``center`` (mid-length on the axis) —
+        # the frame a SliderJoint against a rod's ``axis`` slides.
+        self.bore_radius, self.outer_radius, self.length = bore_r, outer_r, length
+        add_axial_anchors(self, length, ends=("end_a", "end_b"))
+        self.add_anchor(make_anchor("center", (0.0, 0.0, length / 2)))
         self.paint(BLACK_OXIDE)
         self.model = model
