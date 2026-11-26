@@ -325,9 +325,12 @@ class Carriage(Part):
             # belt centre line in the slot, +X along the belt
             _anchor(self, "belt_clamp", (0, BELT_Y, BELT_Z), PX)
         elif camera_mount:
-            # Camera plate: 50 x 50 x 6 on top, 1/4"-20 clearance + two M3 pins.
+            # Camera plate: 70 x 70 x 6 on top, four M5 corner holes, 1/4"-20 clearance + two M3 pins.
             top = CARRIAGE_ABOVE + 6
-            _box(self, -25, 25, -25, 25, CARRIAGE_ABOVE, top)
+            _box(self, -35, 35, -35, 35, CARRIAGE_ABOVE, top)
+            for x in (-27.0, 27.0):
+                for y in (-27.0, 27.0):
+                    _hole_z(self, x, y, M5_CLEAR, CARRIAGE_ABOVE, top)
             _hole_z(self, 0, 0, 3.35, CARRIAGE_ABOVE, top)
             for y in (-16.0, 16.0):
                 _hole_z(self, 0, y, M3_CLEAR, CARRIAGE_ABOVE, top)
