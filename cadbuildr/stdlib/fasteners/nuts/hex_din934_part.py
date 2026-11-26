@@ -1,60 +1,21 @@
 from cadbuildr.foundation import *
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.library import OneOf, part
 from cadbuildr.stdlib.common import add_axial_anchors
 from typing import ClassVar
 import math
 
 
-@catalog_part(
-    id="din934-hex-nut",
-    category="Fasteners",
-    subcategory="Nuts",
+@part(
+    category="Fasteners/Nuts",
     name="Hex Nut",
     standard="DIN 934 / ISO 4032",
     description="Standard metric hexagonal nut with a modeled ISO thread.",
-    params=[
-        ParamSpec.enum(
-            "size",
-            choices=[
-                "M2",
-                "M2.5",
-                "M3",
-                "M4",
-                "M5",
-                "M6",
-                "M8",
-                "M10",
-                "M12",
-                "M14",
-                "M16",
-                "M20",
-                "M24",
-            ],
-            default="M6",
-        ),
-        ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
-    ],
+    inputs={"with_thread": {"label": "Modeled thread"}},
+    catalog_id="din934-hex-nut",
     featured=True,
-    example_config={"size": "M8"},
+    example={"size": "M8"},
 )
 class HexNut(Part):
-    def __init__(self, size, with_thread=True):
-        self.size = size
-        self.with_thread = with_thread
-
-        dimensions = self.dimension_table[size]
-        self.width_across_flats = dimensions["width_across_flats"]  # WAF
-        self.thickness = dimensions["thickness"]
-        self.nominal_diameter = dimensions["nominal_diameter"]
-        self.thread_pitch = dimensions["thread_pitch"]
-
-        self.get_body_sketch()
-        if self.with_thread:
-            self.add_thread()
-        # Anchors: bearing faces (bottom/top) + thread axis.
-        add_axial_anchors(self, self.thickness)
-        self.paint("grey")
-
     # ISO 4032: width_across_flats = s, thickness = m (max).
     dimension_table: ClassVar[dict[str, dict[str, float]]] = {
         "M2": {
@@ -136,6 +97,23 @@ class HexNut(Part):
             "thread_pitch": 3.0,
         },
     }
+
+    def __init__(self, size: OneOf[dimension_table] = "M6", with_thread: bool = True):
+        self.size = size
+        self.with_thread = with_thread
+
+        dimensions = self.dimension_table[size]
+        self.width_across_flats = dimensions["width_across_flats"]  # WAF
+        self.thickness = dimensions["thickness"]
+        self.nominal_diameter = dimensions["nominal_diameter"]
+        self.thread_pitch = dimensions["thread_pitch"]
+
+        self.get_body_sketch()
+        if self.with_thread:
+            self.add_thread()
+        # Anchors: bearing faces (bottom/top) + thread axis.
+        add_axial_anchors(self, self.thickness)
+        self.paint("grey")
 
     def get_body_sketch(self):
         sketch = Sketch(self.xy())

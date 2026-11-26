@@ -10,6 +10,10 @@ dependencies = [
     "cadbuildr-foundation>=0.2.19,<0.3.0",
 ]
 
+# Library discovery (cadbuildr.foundation.library): id = import root.
+[project.entry-points."cadbuildr.libraries"]
+stdlib = "cadbuildr.stdlib"
+
 [tool.cadbuildr.dependencies]
 cadbuildr-foundation = "^0.2.19"
 

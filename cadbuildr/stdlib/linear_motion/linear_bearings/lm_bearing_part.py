@@ -3,26 +3,18 @@
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.library import OneOf, part
 from cadbuildr.stdlib.common import BLACK_OXIDE, add_axial_anchors
 
 
-@catalog_part(
-    id="lm-uu-linear-bearing",
-    category="Linear Motion",
-    subcategory="Linear Bearings",
+@part(
+    category="Linear Motion/Linear Bearings",
     name="Linear Ball Bearing (LMxUU)",
     standard="LMxUU metric series",
     description="Closed-type linear ball bushing for round rod (LMxUU series sizing).",
-    params=[
-        ParamSpec.enum(
-            "model",
-            choices=["LM6UU", "LM8UU", "LM10UU", "LM12UU", "LM16UU"],
-            default="LM8UU",
-        ),
-    ],
+    catalog_id="lm-uu-linear-bearing",
     featured=True,
-    example_config={"model": "LM8UU"},
+    example={"model": "LM8UU"},
 )
 class LinearBearing(Part):
     # bore (d), outer diameter (D), length (L)
@@ -34,7 +26,7 @@ class LinearBearing(Part):
         "LM16UU": {"d": 16.0, "D": 28.0, "L": 37.0},
     }
 
-    def __init__(self, model="LM8UU"):
+    def __init__(self, model: OneOf[TABLE] = "LM8UU"):
         if model not in self.TABLE:
             raise ValueError(f"Unknown linear bearing '{model}'.")
         b = self.TABLE[model]

@@ -3,27 +3,32 @@
 import math
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.library import Num, part
 from cadbuildr.stdlib.common import ALUMINIUM, add_axial_anchors
 
 
-@catalog_part(
-    id="clamp-shaft-coupling",
-    category="Power Transmission",
-    subcategory="Couplings",
+@part(
+    category="Power Transmission/Couplings",
     name="Shaft Coupling (clamp)",
     standard="aluminium clamp coupling",
     description="Aluminium clamping coupling with a stepped bore for two shaft diameters and a clamp slit at each end.",
-    params=[
-        ParamSpec.number("bore_a", min=3, max=12, default=5, step=1, label="Bore A"),
-        ParamSpec.number("bore_b", min=3, max=12, default=8, step=1, label="Bore B"),
-        ParamSpec.number("length", min=15, max=40, default=25, step=1),
-    ],
+    inputs={"bore_a": {"label": "Bore A"}, "bore_b": {"label": "Bore B"}},
+    catalog_id="clamp-shaft-coupling",
     featured=False,
-    example_config={"bore_a": 5, "bore_b": 8, "length": 25},
+    example={"bore_a": 5, "bore_b": 8, "length": 25},
 )
 class ClampCoupling(Part):
-    def __init__(self, bore_a=5, bore_b=8, length=25):
+    def __init__(
+        self,
+        bore_a: Num(min=3, max=12, step=1) = 5,
+        bore_b: Num(min=3, max=12, step=1) = 8,
+        length: Num(min=15, max=40, step=1) = 25,
+    ):
+        """Args:
+        bore_a: bore diameter at ``end_a`` (e.g. the 5 mm NEMA 17 shaft).
+        bore_b: bore diameter at ``end_b`` (e.g. the 8 mm lead screw).
+        length: overall length; each shaft goes in half of it.
+        """
         outer_d = max(bore_a, bore_b) * 2.4 + 4
         outer_r = outer_d / 2
         half = length / 2

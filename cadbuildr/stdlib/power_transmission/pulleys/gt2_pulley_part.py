@@ -3,7 +3,7 @@
 import math
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.library import Num, part
 from cadbuildr.stdlib.common import ALUMINIUM, add_axial_anchors
 
 _GT2_PITCH = 2.0  # mm, belt tooth pitch
@@ -11,23 +11,27 @@ _FLANGE_T = 1.0  # flange thickness
 _FLANGE_EXTRA = 2.0  # flange radius beyond pitch radius
 
 
-@catalog_part(
-    id="gt2-pulley",
-    category="Power Transmission",
-    subcategory="Pulleys",
+@part(
+    category="Power Transmission/Pulleys",
     name="GT2 Timing Pulley",
     standard="GT2 · 2 mm pitch",
     description="Toothed GT2 timing-belt pulley with flanges and a bore; set the tooth count, bore and belt width.",
-    params=[
-        ParamSpec.number("teeth", min=10, max=60, default=20, step=1),
-        ParamSpec.number("bore", min=3, max=10, default=5, step=1),
-        ParamSpec.number("belt_width", min=6, max=12, default=6, step=1),
-    ],
+    catalog_id="gt2-pulley",
     featured=True,
-    example_config={"teeth": 20, "bore": 5, "belt_width": 6},
+    example={"teeth": 20, "bore": 5, "belt_width": 6},
 )
 class GT2Pulley(Part):
-    def __init__(self, teeth=20, bore=5, belt_width=6):
+    def __init__(
+        self,
+        teeth: Num(min=10, max=60, step=1, unit=None, integer=True) = 20,
+        bore: Num(min=3, max=10, step=1) = 5,
+        belt_width: Num(min=6, max=12, step=1) = 6,
+    ):
+        """Args:
+        teeth: tooth count (pitch radius = teeth x 2 mm / 2 pi).
+        bore: shaft bore diameter.
+        belt_width: width of the toothed band between the flanges.
+        """
         self.teeth = int(teeth)
         pitch_r = (self.teeth * _GT2_PITCH) / (2 * math.pi)
         flange_r = pitch_r + _FLANGE_EXTRA

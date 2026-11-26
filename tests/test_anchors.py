@@ -62,6 +62,97 @@ def _extrusion(p):
     return out
 
 
+# motion kits (frames documented in cadbuildr.stdlib.motion_kits.parts)
+PX, NX, PY, NY = (1.0, 0.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, -1.0, 0.0)
+_ROD_Z, _NEMA_PITCH = 30.0, {"NEMA14": 26.0, "NEMA17": 31.0, "NEMA23": 47.14}
+_NEMA_BODY = {"NEMA14": 35.2, "NEMA17": 42.3, "NEMA23": 56.4}
+
+
+def _rod_end_plate(p):
+    t, s = p.thickness, p.spacing
+    out = {
+        "outer_face": ((0, 0, _ROD_Z), NX),
+        "inner_face": ((t, 0, _ROD_Z), PX),
+        "bottom": ((t / 2 + 10, 0, 0), DOWN),
+        "drive_axis": ((0, 0, _ROD_Z), PX),
+    }
+    for tag, y in (("a", -s / 2), ("b", s / 2)):
+        out[f"rod_hole_{tag}"] = ((0, y, _ROD_Z), PX)
+        out[f"foot_hole_{tag}"] = ((t + 10, y, 8), UP)
+    if p.motor:
+        hp = _NEMA_PITCH[p.nema] / 2
+        out["motor_face"] = ((0, 0, _ROD_Z), NX)
+        holes = [(sy * hp, _ROD_Z + sz * hp) for sy in (-1, 1) for sz in (-1, 1)]
+        out.update(
+            {f"motor_hole_{i}": ((t, y, z), PX) for i, (y, z) in enumerate(holes)}
+        )
+    else:
+        out["bearing_seat"] = ((t - 7, 0, _ROD_Z), PX)
+    return out
+
+
+def _carriage_common(p):
+    L, s = p.length, p.spacing
+    out = {"top": ((0, 0, p.top), UP), "bottom": ((0, 0, -16), DOWN)}
+    pockets = [
+        (-L / 2, -s / 2, PX),
+        (-L / 2, s / 2, PX),
+        (L / 2, -s / 2, NX),
+        (L / 2, s / 2, NX),
+    ]
+    for i, (x, y, n) in enumerate(pockets):
+        out[f"bearing_pocket_{i}"] = ((x, y, 0), n)
+    out["rod_axis_a"] = ((0, -s / 2, 0), PX)
+    out["rod_axis_b"] = ((0, s / 2, 0), PX)
+    if p.lead_screw:
+        r = 8 / math.sqrt(2)
+        out["nut_face"] = ((-L / 2, 0, 0), NX)
+        for j, (y, z) in enumerate([(-r, -r), (-r, r), (r, -r), (r, r)]):
+            out[f"nut_hole_{j}"] = ((-L / 2, y, z), NX)
+    return out
+
+
+def _carriage(p):
+    out = _carriage_common(p)
+    L = p.length
+    holes = [(sx * (L / 2 - 10), sy * 15) for sx in (-1, 1) for sy in (-1, 1)]
+    out.update({f"mount_hole_{i}": ((x, y, 20), UP) for i, (x, y) in enumerate(holes)})
+    if p.belt_clamp:
+        out["belt_clamp"] = ((0, 40 / (2 * math.pi), 27), PX)
+    return out
+
+
+def _gantry_carriage(p):
+    out = _carriage_common(p)
+    hw, xs = p.width / 2, p.x_spacing / 2
+    out["x_rod_hole_a"] = ((-xs, hw, 24), NY)
+    out["x_rod_hole_b"] = ((xs, hw, 24), NY)
+    for side, sign, n in (("p", 1, PY), ("n", -1, NY)):
+        out[f"side_face_{side}"] = ((0, sign * hw, 24), n)
+        out[f"side_hole_{side}0"] = ((-15, sign * hw, 24), n)
+        out[f"side_hole_{side}1"] = ((15, sign * hw, 24), n)
+    return out
+
+
+def _motor_mount(p):
+    t, H = p.thickness, p.height
+    mx = t + 7 + _NEMA_BODY[p.nema] / 2
+    out = {"mount_face": ((0, 0, 10), NX), "axis": ((mx, 0, H), UP)}
+    for i, y in enumerate((-15, 15)):
+        out[f"mount_hole_{i}"] = ((0, y, 10), NX)
+        out[f"mount_screw_{i}"] = ((t, y, 10), PX)
+    if p.motor:
+        hp = _NEMA_PITCH[p.nema] / 2
+        out["motor_face"] = ((mx, 0, H - t), DOWN)
+        holes = [(mx + sx * hp, sy * hp) for sx in (-1, 1) for sy in (-1, 1)]
+        out.update(
+            {f"motor_hole_{i}": ((x, y, H), UP) for i, (x, y) in enumerate(holes)}
+        )
+    else:
+        out["nut_seat"] = ((mx, 0, H - t), DOWN)
+    return out
+
+
 def _with(base, **extra):
     return lambda p: {**base(p), **extra}
 
@@ -119,7 +210,52 @@ EXPECTED = {
     },
     "nema-stepper-motor": _stepper,
     "alu-extrusion-tslot": _extrusion,
+    # motion kits
+    "rod-end-plate": _rod_end_plate,
+    "motion-carriage": _carriage,
+    "gantry-carriage": _gantry_carriage,
+    "motor-mount-l-bracket": _motor_mount,
 }
+
+
+def _gearbox_plate(p):
+    g = p.geometry
+    cd, B, t = g.center_distance, g.bearing_width, g.thickness
+    out = {
+        "bore_in": ((0, 0, 0), UP),
+        "bore_out": ((cd, 0, 0), UP),
+        "seat_in": ((0, 0, B), DOWN),
+        "seat_out": ((cd, 0, B), DOWN),
+        "outer": ((0, 0, 0), DOWN),
+        "inner": ((0, 0, t), UP),
+    }
+    for i, (x, y) in enumerate(g.hole_positions(), start=1):
+        out[f"hole_{i}"] = ((x, y, 0), DOWN)
+    for i, (x, y) in enumerate(g.mount_positions(), start=1):
+        out[f"mount_{i}"] = ((x, y, 0), DOWN)
+    return out
+
+
+def _gear_stage(p):
+    g = p.geometry
+    cd, h, e = g.center_distance, g.height, g.shaft_extension
+    return {
+        "input": ((0, 0, -e), DOWN),
+        "output": ((cd, 0, h + e), UP),
+        "input_axis": ((0, 0, 0), UP),
+        "output_axis": ((cd, 0, 0), UP),
+        "face_a": ((0, 0, 0), DOWN),
+        "face_b": ((0, 0, h), UP),
+    }
+
+
+EXPECTED.update(
+    {
+        "gearbox-plate": _gearbox_plate,
+        "spacer": lambda p: _axial(p.length),
+        "gear-stage": _gear_stage,
+    }
+)
 
 ENTRIES = get_catalog_entries()
 

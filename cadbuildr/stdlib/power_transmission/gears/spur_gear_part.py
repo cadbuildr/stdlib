@@ -11,7 +11,7 @@ from cadbuildr.foundation import (
     Sketch,
     make_anchor,
 )
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.library import Num, part
 from cadbuildr.stdlib.common import STEEL, add_axial_anchors
 
 PRESSURE_ANGLE_DEG = 20.0
@@ -76,24 +76,29 @@ def spur_gear_outline(
     return pts
 
 
-@catalog_part(
-    id="spur-gear",
-    category="Power Transmission",
-    subcategory="Gears",
+@part(
+    category="Power Transmission/Gears",
     name="Spur Gear",
     standard="ISO module · involute 20°",
     description="Parametric spur gear by module and tooth count, with a central bore. Involute teeth (20° pressure angle) with a little backlash, so gears placed by mesh_gears() do not overlap.",
-    params=[
-        ParamSpec.number("module", min=0.5, max=3, default=1, step=0.5, unit="mm"),
-        ParamSpec.number("teeth", min=8, max=60, default=20, step=1),
-        ParamSpec.number("face_width", min=2, max=20, default=6, step=1),
-        ParamSpec.number("bore", min=2, max=12, default=5, step=1),
-    ],
+    catalog_id="spur-gear",
     featured=True,
-    example_config={"module": 1, "teeth": 20, "face_width": 6, "bore": 5},
+    example={"module": 1, "teeth": 20, "face_width": 6, "bore": 5},
 )
 class SpurGear(Part):
-    def __init__(self, module=1, teeth=20, face_width=6, bore=5):
+    def __init__(
+        self,
+        module: Num(min=0.5, max=3, step=0.5) = 1,
+        teeth: Num(min=8, max=60, step=1, integer=True, unit=None) = 20,
+        face_width: Num(min=2, max=20, step=1) = 6,
+        bore: Num(min=2, max=12, step=1) = 5,
+    ):
+        """Args:
+        module: tooth size (pitch diameter / teeth); meshing gears share it.
+        teeth: number of teeth.
+        face_width: gear thickness along its axis.
+        bore: diameter of the central bore (the shaft diameter).
+        """
         self.module = module
         self.teeth = int(teeth)
         pitch_r = module * self.teeth / 2

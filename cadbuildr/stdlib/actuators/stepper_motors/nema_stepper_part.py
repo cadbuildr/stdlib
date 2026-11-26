@@ -4,26 +4,18 @@ import math
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.library import Num, OneOf, part
 from cadbuildr.stdlib.common import BLACK_OXIDE
 
 
-@catalog_part(
-    id="nema-stepper-motor",
-    category="Actuators",
-    subcategory="Stepper Motors",
+@part(
+    category="Actuators/Stepper Motors",
     name="NEMA Stepper Motor",
     standard="NEMA 14 / 17 / 23",
     description="Hybrid stepper motor: chamfered body, front boss, output shaft and four mounting holes. Pick the frame and body length.",
-    params=[
-        ParamSpec.enum(
-            "frame", choices=["NEMA14", "NEMA17", "NEMA23"], default="NEMA17"
-        ),
-        ParamSpec.number("body_length", min=20, max=80, default=40, step=1),
-        ParamSpec.number("shaft_length", min=10, max=40, default=24, step=1),
-    ],
+    catalog_id="nema-stepper-motor",
     featured=True,
-    example_config={"frame": "NEMA17", "body_length": 40, "shaft_length": 24},
+    example={"frame": "NEMA17", "body_length": 40, "shaft_length": 24},
 )
 class StepperMotor(Part):
     # body = frame size, pitch = mounting-hole spacing, boss_d, shaft_d, hole_d
@@ -51,7 +43,17 @@ class StepperMotor(Part):
         },
     }
 
-    def __init__(self, frame="NEMA17", body_length=40, shaft_length=24):
+    def __init__(
+        self,
+        frame: OneOf[TABLE] = "NEMA17",
+        body_length: Num(min=20, max=80, step=1) = 40,
+        shaft_length: Num(min=10, max=40, step=1) = 24,
+    ):
+        """Args:
+        frame: NEMA frame size (body square, hole pitch, boss and shaft from ``TABLE``).
+        body_length: motor body length behind the mounting face.
+        shaft_length: output shaft length beyond the mounting face.
+        """
         if frame not in self.TABLE:
             raise ValueError(f"Unknown frame '{frame}'.")
         d = self.TABLE[frame]

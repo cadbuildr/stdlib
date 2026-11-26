@@ -17,6 +17,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 import pkgutil
+import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -119,7 +120,26 @@ class CatalogEntry:
         return getattr(module, self.cls)
 
 
-_REGISTRY: dict[str, CatalogEntry] = {}
+def _param_widget(p: ParamSpec) -> dict:
+    """A ``ParamSpec`` as a library widget (``cadbuildr.foundation.library``)."""
+    if p.kind == "enum":
+        return {
+            "kind": "enum",
+            "options": [str(c) for c in p.choices or []],
+            "default": str(p.default),
+        }
+    if p.kind == "bool":
+        return {"kind": "bool", "default": bool(p.default)}
+    w = {
+        "kind": "number",
+        "integer": False,
+        "default": p.default,
+        "unit": p.unit or "mm",
+    }
+    for key in ("min", "max", "step"):
+        if getattr(p, key) is not None:
+            w[key] = getattr(p, key)
+    return w
 
 
 def catalog_part(
@@ -134,28 +154,100 @@ def catalog_part(
     featured: bool = False,
     example_config: Optional[dict] = None,
 ):
-    """Class decorator that registers a Part/Assembly into the catalog."""
+    """Class decorator that registers a Part/Assembly into the catalog.
+
+    A thin alias over :func:`cadbuildr.foundation.library.part` (or
+    ``assembly``): the class becomes a library item (manifest entry with
+    widgets, ``library_ref`` stamping), and the catalog fields are kept for
+    :func:`get_catalog_manifest`.
+    """
+    from cadbuildr.foundation import Assembly
+    from cadbuildr.foundation.library import assembly, part
+
+    params = list(params or [])
 
     def _wrap(cls):
-        entry = CatalogEntry(
-            id=id,
-            category=category,
-            subcategory=subcategory,
+        decorator = assembly if issubclass(cls, Assembly) else part
+        decorator(
+            category=f"{category}/{subcategory}",
             name=name,
             standard=standard,
             description=description,
-            module=cls.__module__,
-            cls=cls.__name__,
-            params=list(params or []),
+            inputs={
+                p.name: {"widget": _param_widget(p), "label": p.label} for p in params
+            },
+            catalog={
+                "id": id,
+                "category": category,
+                "subcategory": subcategory,
+                "params": params,
+            },
+            catalog_id=id,
             featured=featured,
-            example_config=dict(example_config or {}),
-        )
-        # Last registration wins -- keeps re-imports idempotent.
-        _REGISTRY[id] = entry
+            example=dict(example_config or {}),
+        )(cls)
         cls._catalog_id = id  # back-reference, handy for debugging
         return cls
 
     return _wrap
+
+
+# --------------------------------------------------------------------------- #
+# Catalog entries from the library registry
+# --------------------------------------------------------------------------- #
+
+
+def _kebab(name: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "-", name).lower()
+
+
+def _params_from_inputs(item) -> list:
+    """ParamSpecs derived from a ``@part`` item's widgets (enum / number / bool)."""
+    out = []
+    for entry in item.inputs():
+        w = entry["widget"]
+        label = entry["label"]
+        if w["kind"] == "enum":
+            out.append(
+                ParamSpec.enum(entry["name"], w["options"], w["default"], label=label)
+            )
+        elif w["kind"] == "bool":
+            out.append(ParamSpec.boolean(entry["name"], w["default"], label=label))
+        elif (
+            w["kind"] == "number"
+            and w.get("min") is not None
+            and w.get("max") is not None
+        ):
+            out.append(
+                ParamSpec.number(
+                    entry["name"],
+                    min=w["min"],
+                    max=w["max"],
+                    default=w["default"],
+                    step=w.get("step", 1),
+                    label=label,
+                    unit=w.get("unit", "mm"),
+                )
+            )
+    return out
+
+
+def _entry_for(item) -> CatalogEntry:
+    meta = item.extra.get("catalog") or {}
+    category, _, subcategory = (item.category or "Other").partition("/")
+    return CatalogEntry(
+        id=meta.get("id") or item.extra.get("catalog_id") or _kebab(item.cls),
+        category=meta.get("category") or category,
+        subcategory=meta.get("subcategory") or subcategory or category,
+        name=item.name,
+        standard=item.standard or "",
+        description=item.description or "",
+        module=item.module,
+        cls=item.cls,
+        params=list(meta["params"]) if "params" in meta else _params_from_inputs(item),
+        featured=bool(item.extra.get("featured")),
+        example_config=dict(item.extra.get("example") or {}),
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -180,11 +272,17 @@ def _discover() -> None:
 
 
 def get_catalog_entries() -> list[CatalogEntry]:
-    """All registered entries, sorted by (category, subcategory, name)."""
+    """All stdlib library items as catalog entries, sorted by (category, subcategory, name)."""
+    from cadbuildr.foundation.library import items
+
     _discover()
-    return sorted(
-        _REGISTRY.values(), key=lambda e: (e.category, e.subcategory, e.name)
-    )
+    entries = {}
+    for item in items("cadbuildr.stdlib"):
+        if item.kind not in ("part", "assembly"):
+            continue
+        entry = _entry_for(item)
+        entries[entry.id] = entry  # last registration wins
+    return sorted(entries.values(), key=lambda e: (e.category, e.subcategory, e.name))
 
 
 def get_catalog_manifest() -> list[dict]:
