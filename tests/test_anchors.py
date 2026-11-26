@@ -119,6 +119,8 @@ def _carriage(p):
     out.update({f"mount_hole_{i}": ((x, y, 20), UP) for i, (x, y) in enumerate(holes)})
     if p.belt_clamp:
         out["belt_clamp"] = ((0, 40 / (2 * math.pi), 27), PX)
+    elif p.camera_mount:
+        out["camera"] = ((0, 0, 26), UP)
     return out
 
 

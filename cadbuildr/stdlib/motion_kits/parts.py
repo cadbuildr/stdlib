@@ -306,6 +306,7 @@ class Carriage(Part):
     ):
         _carriage_body(self, rod, spacing, length, CARRIAGE_ABOVE, lead_screw)
         self.belt_clamp, self.lead_screw = bool(belt_clamp), bool(lead_screw)
+        self.camera_mount = bool(camera_mount) and not self.belt_clamp
         L = self.length
         self.mount_holes = [
             (sx * (L / 2 - 10), sy * 15.0) for sx in (-1, 1) for sy in (-1, 1)

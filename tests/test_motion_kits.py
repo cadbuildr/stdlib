@@ -63,7 +63,14 @@ def test_new_part_widgets():
     assert w["motor"] == {"kind": "bool", "default": False}
     assert w["spacing"]["kind"] == "number" and w["spacing"]["min"] == 60
     w = _widgets("stdlib:Carriage")
-    assert list(w) == ["rod", "spacing", "length", "belt_clamp", "lead_screw"]
+    assert list(w) == [
+        "rod",
+        "spacing",
+        "length",
+        "belt_clamp",
+        "lead_screw",
+        "camera_mount",
+    ]
     assert w["rod"] == rod
     assert w["belt_clamp"] == {"kind": "bool", "default": False}
     w = _widgets("stdlib:GantryCarriage")
@@ -153,10 +160,18 @@ def test_part_validation():
 
 
 def test_belt_clamp_adds_geometry_and_anchor():
-    off, on = Carriage(), Carriage(belt_clamp=True)
+    off, on = Carriage(camera_mount=False), Carriage(belt_clamp=True)
     names = lambda part: {a.name.value for a in part.anchors}  # noqa: E731
     assert "belt_clamp" in names(on) and "belt_clamp" not in names(off)
     assert len(on.operations) > len(off.operations)
+
+
+def test_camera_mount_plate_unless_belt_clamp():
+    names = lambda part: {a.name.value for a in part.anchors}  # noqa: E731
+    assert "camera" in names(Carriage()) and "camera" not in names(
+        Carriage(camera_mount=False)
+    )
+    assert "camera" not in names(Carriage(belt_clamp=True))
 
 
 # --------------------------------------------------------------------------- #
