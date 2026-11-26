@@ -151,6 +151,7 @@ class RodEndPlate(Part):
         thickness: plate thickness along the rods.
         motor: True for the motor end (NEMA face), False for the idler end (608 seat).
         nema: NEMA frame of the motor face (motor end only).
+        lightening: cut a window through the plate on each side of the drive axis.
     """
 
     RODS: ClassVar[dict] = RODS
@@ -164,6 +165,7 @@ class RodEndPlate(Part):
         thickness: Num(min=8, max=20, step=1) = 10,
         motor: bool = False,
         nema: OneOf[NEMA] = "NEMA17",
+        lightening: bool = True,
     ):
         r = _check_rod(rod)
         d, t, s = r["d"], float(thickness), float(spacing)
@@ -197,6 +199,14 @@ class RodEndPlate(Part):
             seat = t - SEAT_608["B"]
             _hole_x(self, 0, ROD_Z, SEAT_608["D"] / 2, seat, t)
             _hole_x(self, 0, ROD_Z, 5.0, 0, seat)
+        if lightening:
+            # Windows between the drive axis and each rod hole (clear of both).
+            inner = (m["pitch"] / 2 + m["hole_d"] if motor else SEAT_608["D"] / 2) + 3
+            outer = s / 2 - d / 2 - 3
+            if outer - inner >= 5:
+                for sy in (-1, 1):
+                    y0, y1 = sorted((sy * inner, sy * outer))
+                    _box(self, 0, t, y0, y1, 10, PLATE_HEIGHT - 10, cut=True)
 
         # Anchors (+Z of each = outward normal / mate direction):
         _anchor(self, "outer_face", (0, 0, ROD_Z), NX)
