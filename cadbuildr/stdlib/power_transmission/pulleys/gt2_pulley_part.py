@@ -3,6 +3,7 @@
 import math
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
+from cadbuildr.foundation.interfaces import Bore, PlaneFace, ScrewHole
 from cadbuildr.foundation.library import Num, part
 from cadbuildr.stdlib.common import ALUMINIUM, add_axial_anchors
 
@@ -71,4 +72,9 @@ class GT2Pulley(Part):
         self.height = top
         add_axial_anchors(self, top)
         self.add_anchor(make_anchor("belt_plane", (0.0, 0.0, (body_z0 + body_z1) / 2)))
+        # Interfaces: the bore on a Shaft, the bottom flange on a face, and the
+        # top flange as the face an idler screw head lands on.
+        self.add_interface(Bore(d=bore), "axis")
+        self.add_interface(PlaneFace(), "bottom")
+        self.add_interface(ScrewHole(size=f"M{bore:g}", depth=top), "top")
         self.paint(ALUMINIUM)

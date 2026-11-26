@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from cadbuildr.foundation import Circle, Extrusion, Part, Point, Sketch
+from cadbuildr.foundation.interfaces import PlaneFace
 from cadbuildr.foundation.library import Num, OneOf, part
 from cadbuildr.stdlib.common import BRASS, add_axial_anchors
 from cadbuildr.stdlib.gearbox.geometry import CLEARANCE
@@ -52,4 +53,7 @@ class Spacer(Part):
         )
         self.screw, self.length, self.outer_diameter = screw, length, outer_diameter
         add_axial_anchors(self, length)
+        # Interfaces: both end faces sit flat on a plate (PlaneFace).
+        self.add_interface(PlaneFace(), "bottom")
+        self.add_interface(PlaneFace(), "top")
         self.paint(BRASS)

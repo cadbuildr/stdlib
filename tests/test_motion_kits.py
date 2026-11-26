@@ -1,20 +1,21 @@
 """Motion kits: manifest entries + widgets of the new parts and of the stdlib
-parts the demos reuse, the two demo layouts (every item evaluates, placements
-are one-rotation, parts sit on what they mate with) and their bindings."""
+parts the demos reuse, and the two demo layouts as connect sequences (every
+part placed by one connect, check() clean, positions as the old coordinate
+tables, consistent when rod / lengths / spacing change) and their bindings."""
 
 import json
+import os
 
 import numpy as np
 import pytest
 
-from cadbuildr.foundation.compute_functions import _SOURCE_COMPONENT_ATTR
 from cadbuildr.foundation.dag_utils import show_dag
+from cadbuildr.foundation.interference import _rotation, estimate_part_extents
+from cadbuildr.foundation.interfaces import LoopMismatch
 from cadbuildr.foundation.library import get_manifest
 from cadbuildr.foundation.library.evaluate import evaluate
-from cadbuildr.foundation.math_utils import (
-    quaternion_rotate_vector,
-    tf_relative_to_frame,
-)
+from cadbuildr.foundation.library.layout import build_layout, validate_layout
+from cadbuildr.foundation.math_utils import tf_relative_to_frame
 from cadbuildr.stdlib.motion_kits import demos
 from cadbuildr.stdlib.motion_kits.parts import (
     Carriage,
@@ -84,8 +85,11 @@ def test_new_part_widgets():
     "item_id,expected",
     [
         ("stdlib:SmoothRod", {"diameter": "enum", "length": "number"}),
-        ("stdlib:LinearBearing", {"model": "enum"}),
-        ("stdlib:LeadScrewT8", {"length": "number", "with_thread": "bool"}),
+        ("stdlib:LinearBearing", {"model": "enum", "rod": "enum"}),
+        (
+            "stdlib:LeadScrewT8",
+            {"length": "number", "with_thread": "bool", "trim": "number"},
+        ),
         ("stdlib:LeadScrewNutT8", {"with_thread": "bool"}),
         (
             "stdlib:StepperMotor",
@@ -99,7 +103,10 @@ def test_new_part_widgets():
             "stdlib:ClampCoupling",
             {"bore_a": "number", "bore_b": "number", "length": "number"},
         ),
-        ("stdlib:AluExtrusion", {"series": "enum", "length": "number"}),
+        (
+            "stdlib:AluExtrusion",
+            {"series": "enum", "length": "number", "trim": "number"},
+        ),
     ],
 )
 def test_reused_parts_declare_typed_inputs(item_id, expected):
@@ -175,27 +182,47 @@ def test_camera_mount_plate_unless_belt_clamp():
 
 
 # --------------------------------------------------------------------------- #
-# Layouts
+# Layouts (connect sequences)
 # --------------------------------------------------------------------------- #
 
+BUILT = {name: build_layout(layout) for name, layout in LAYOUTS.items()}
+REFERENCE = json.load(
+    open(os.path.join(os.path.dirname(__file__), "data", "layouts_at_9466104.json"))
+)
 
-def test_layout_sizes_and_shape():
-    assert 15 <= len(LAYOUTS["linear_stage"]["items"]) <= 32
-    assert 50 <= len(LAYOUTS["xy_gantry"]["items"]) <= 80
+
+def test_layout_shape():
+    assert len(LAYOUTS["linear_stage"]["items"]) == 27  # + a 4-screw fill_group
+    assert len(BUILT["linear_stage"].components) == 30
+    assert len(BUILT["xy_gantry"].components) == 80
     for layout in LAYOUTS.values():
-        json.dumps(layout)
-        names = [e["name"] for e in layout["items"]]
-        assert len(names) == len(set(names))
+        validate_layout(layout)  # JSON, names, grounded first, no positions
         for e in layout["items"]:
-            assert set(e) == {"name", "item", "inputs", "translate", "rotate", "mates"}
             assert e["item"] in ITEMS, e["item"]
-            assert len(e["translate"]) == 3
-            # the viewer places with ONE rotation about X, Y or Z
-            assert e["rotate"] is None or (
-                set(e["rotate"]) == {"axis", "angle"} and e["rotate"]["axis"] in "XYZ"
-            )
             assert set(e["inputs"]) <= {i["name"] for i in ITEMS[e["item"]]["inputs"]}
-            assert set(e["mates"]) <= set(names)
+        assert layout["items"][0]["connect"] is None
+        assert all(e["connect"] for e in layout["items"][1:])
+
+
+@pytest.mark.parametrize("name", list(LAYOUTS))
+def test_every_part_placed_by_exactly_one_connect(name):
+    asm = BUILT[name]
+    # one grounded part (add_component at the origin), one joint per other part
+    assert len(asm.joints) == len(asm.components) - 1
+    children = [id(j.child_anchor) for j in asm.joints]
+    assert len(set(children)) == len(children)
+    issues = asm.check()
+    assert [i for i in issues if i["severity"] != "info"] == [], issues
+    # the loops really closed something
+    assert len(LAYOUTS[name]["loops"]) >= 10
+
+
+@pytest.mark.parametrize("name", list(LAYOUTS))
+def test_show_dag_carries_a_clean_check(name):
+    dag = show_dag(BUILT[name])
+    assert dag["DAG"][dag["rootNodeId"]]["deps"]["components"]
+    assert [c for c in dag["checks"] if c["severity"] != "info"] == []
+    assert any(c["code"] == "moves" for c in dag["checks"])  # the carriage slides
 
 
 def _unique_requests():
@@ -209,29 +236,91 @@ def _unique_requests():
 
 @pytest.mark.parametrize("item_id,inputs", _unique_requests())
 def test_every_layout_item_evaluates(item_id, inputs):
-    result = evaluate({"item": item_id, "inputs": inputs})
+    result = evaluate({"item": item_id, "inputs": inputs, "interfaces": True})
     assert result["ok"], result.get("error")
     dag = result["dag"]
     root = dag["DAG"][dag["rootNodeId"]]
     assert root["deps"].get("anchors"), item_id
+    assert result["interfaces"], item_id
 
 
-@pytest.mark.parametrize("name", list(LAYOUTS))
-def test_no_floating_part(name):
-    """Every part is connected (through ``mates``) to the rest of the build."""
-    items = LAYOUTS[name]["items"]
-    adj = {e["name"]: set() for e in items}
-    for e in items:
-        for m in e["mates"]:
-            adj[e["name"]].add(m)
-            adj[m].add(e["name"])
-    seen, todo = set(), [items[0]["name"]]
-    while todo:
-        n = todo.pop()
-        if n not in seen:
-            seen.add(n)
-            todo.extend(adj[n] - seen)
-    assert seen == set(adj), sorted(set(adj) - seen)
+def _boxes(asm, ref):
+    """{name: (lo, hi)} world boxes in the frame of part ``ref``."""
+    roots = {r.name.value: r for r in asm.components}
+    r0 = roots[ref]
+    R0, P0 = _rotation(r0.frame.quaternion), np.array(r0.frame.position, float)
+    out = {}
+    for name, root in roots.items():
+        ext = estimate_part_extents(root)
+        R, P = _rotation(root.frame.quaternion), np.array(root.frame.position, float)
+        corners = (np.vstack([b.corners() for b in ext.boxes]) @ R.T + P - P0) @ R0
+        out[name] = (corners.min(axis=0), corners.max(axis=0))
+    return out
+
+
+# The X brackets are 0.5 mm taller than in the coordinate table: the pulleys
+# now sit on them (the table floated them 0.5 mm above), so the bracket top,
+# the motor under it, its screws and the idler nut move up 0.5 mm; the belt
+# plane (pulleys) is unchanged.
+_HALF_MM = (
+    "x_motor_bracket",
+    "x_idler_bracket",
+    "x_motor",
+    "x_motor_screw_",
+    "x_idler_nut",
+)
+
+
+def _compare(asm, ref_key, ref_part):
+    want = REFERENCE[ref_key]
+    got = _boxes(asm, ref_part)
+    assert set(got) == set(want)
+    groups = {}
+    for name, (lo, hi) in want.items():
+        tol = 0.5 + 1e-3 if name.startswith(_HALF_MM) else 1e-3
+        if name.startswith("x_motor_screw_") or name.startswith("motor_screw_"):
+            groups.setdefault(name.rsplit("_", 1)[0], []).append((name, lo))
+            continue  # a fill_group: same set of positions, numbered by the group
+        assert np.allclose(got[name][0], lo, atol=tol), (name, got[name][0], lo)
+        assert np.allclose(got[name][1], hi, atol=tol), (name, got[name][1], hi)
+    for prefix, members in groups.items():
+        want_set = sorted(tuple(np.round(lo, 3)) for _, lo in members)
+        got_set = sorted(tuple(np.round(got[n][0], 3)) for n, _ in members)
+        assert np.allclose(
+            np.array(want_set)[:, :2], np.array(got_set)[:, :2], atol=1e-3
+        ), prefix
+        assert np.allclose(
+            np.array(want_set)[:, 2], np.array(got_set)[:, 2], atol=0.6
+        ), prefix
+
+
+@pytest.mark.parametrize(
+    "name,values,ref_key,ref_part",
+    [
+        ("linear_stage", {}, "linear_stage", "plate_motor"),
+        (
+            "linear_stage",
+            {"rod": "12", "rail_length": 600, "spacing": 90},
+            "linear_stage_12_600_90",
+            "plate_motor",
+        ),
+        ("xy_gantry", {}, "xy_gantry", "left_plate_motor"),
+        (
+            "xy_gantry",
+            {"rod": "10", "x_length": 500, "y_length": 300},
+            "xy_gantry_10_500_300",
+            "left_plate_motor",
+        ),
+    ],
+)
+def test_solved_positions_match_the_old_coordinate_tables(
+    name, values, ref_key, ref_part
+):
+    """The joints put every part where the coordinate tables of git 9466104
+    did (boxes relative to the grounded plate), for the defaults and for a
+    changed rod / length / spacing (lengths drive positions through the chain)."""
+    asm = getattr(demos, f"build_{name}")(**values)
+    _compare(asm, ref_key, ref_part)
 
 
 @pytest.mark.parametrize(
@@ -248,67 +337,46 @@ def test_no_unintended_interference(name, values):
     assert demos.check_layout_interference(layout) == []
 
 
-def _placed(layout):
-    asm = demos.build_from_layout(layout)
-    comps = {
-        root.name.value: getattr(root, _SOURCE_COMPONENT_ATTR)
-        for root in asm.components
-    }
+def test_rail_length_moves_the_idler_end():
+    a, b = demos.build_linear_stage(), demos.build_linear_stage(rail_length=550)
 
-    def world(name, anchor):
-        a = comps[name].anchor(anchor)
-        assert a is not None, (name, anchor)
-        t, q = tf_relative_to_frame(a.frame, asm.frame)
-        return np.array(t), np.array(quaternion_rotate_vector(list(q), [0.0, 0.0, 1.0]))
+    def x_of(asm, part, anchor):
+        t, _ = tf_relative_to_frame(asm.parts[part].anchor(anchor).frame, asm.frame)
+        return t[0]
 
-    return asm, comps, world
-
-
-def _seated(world, comps, name, anchor, mates, on_axis=False):
-    """``name.anchor`` coincides, facing it, with some anchor of a mate (or,
-    ``on_axis``, some mate anchor lies on its axis, parallel: a screw in a hole)."""
-    p, z = world(name, anchor)
-    for m in mates:
-        for a in comps[m].anchors:
-            q, n = world(m, a.name.value)
-            if on_axis:
-                if np.allclose(np.cross(q - p, z), 0, atol=1e-6) and np.allclose(
-                    np.cross(n, z), 0, atol=1e-6
-                ):
-                    return True
-            elif np.allclose(p, q, atol=1e-6) and np.allclose(z, -n, atol=1e-6):
-                return True
-    return False
+    assert x_of(b, "plate_idler", "outer_face") - x_of(
+        a, "plate_idler", "outer_face"
+    ) == pytest.approx(150)
+    assert x_of(b, "idler_bearing", "top") - x_of(
+        a, "idler_bearing", "top"
+    ) == pytest.approx(150)
 
 
-# (stdlib class, anchor that must sit on an anchor of one of its mates)
-SEATS = {
-    "SmoothRod": "end_a",
-    "LinearBearing": "end_a",
-    "DIN912Screw": "head_seat",
-    "StepperMotor": "mount_face",
-    "ClampCoupling": "bore_a_stop",
-    "LeadScrewT8": "end_a",
-    "LeadScrewNutT8": "flange_seat",
-    "DeepGrooveBearing": "top",
-    "MotorMount": "mount_hole_0",
-}
+def test_carriage_rides_on_a_slider_dof():
+    layout = demos.linear_stage_layout()
+    first = next(e for e in layout["items"] if e["name"] == "bearing_0a")
+    assert first["connect"]["dof"] == {"offset": 165.0}
+    asm = build_layout(layout)
+    slider = next(j for j in asm.joints if type(j).__name__ == "SliderJoint")
+    slider.set_offset(60.0)  # the carriage (and its bearings, nut) follow
+    t, _ = tf_relative_to_frame(asm.parts["carriage"].anchor("top").frame, asm.frame)
+    assert t[0] == pytest.approx(60.0 + 35.0)
+    # the loops on rod b still close (the slider moved along the rods)
+    assert [i for i in asm.check() if i["code"] == "loop"] == []
 
 
-@pytest.mark.parametrize("name", list(LAYOUTS))
-def test_parts_sit_on_their_mates(name):
-    layout = LAYOUTS[name]
-    _, comps, world = _placed(layout)
-    checked = 0
+def test_inconsistent_carriage_spacing_is_a_loop_mismatch():
+    """Plate spacing 80 vs carriage spacing 70: the second rod's bearings miss."""
+    layout = demos.linear_stage_layout()
     for e in layout["items"]:
-        cls = e["item"].split(":")[1]
-        if cls in SEATS and e["mates"]:
-            screw = cls == "DIN912Screw"
-            assert _seated(
-                world, comps, e["name"], SEATS[cls], e["mates"], on_axis=screw
-            ), e["name"]
-            checked += 1
-    assert checked >= len(layout["items"]) // 2
+        if e["name"] == "carriage":
+            e["inputs"]["spacing"] = 70.0
+    with pytest.raises(LoopMismatch) as err:
+        build_layout(layout)
+    e = err.value
+    assert e.delta_mm == pytest.approx(10.0)
+    assert abs(e.along[1]) == pytest.approx(1.0)  # across the rods
+    assert "spacing" in e.hint and "80" in e.hint and "70" in e.hint
 
 
 def test_belt_runs_through_the_clamp():
@@ -317,35 +385,56 @@ def test_belt_runs_through_the_clamp():
     for e in layout["items"]:
         if e["name"] == "x_carriage":
             e["inputs"]["belt_clamp"] = True
-    _, _, world = _placed(layout)
-    clamp, _ = world("x_carriage", "belt_clamp")
+    asm = build_layout(layout)
+
+    def world(part, anchor):
+        t, _ = tf_relative_to_frame(asm.parts[part].anchor(anchor).frame, asm.frame)
+        return np.array(t)
+
+    clamp = world("x_carriage", "belt_clamp")
+    up = np.array(
+        tf_relative_to_frame(asm.parts["x_carriage"].anchor("top").frame, asm.frame)[0]
+    ) - np.array(
+        tf_relative_to_frame(asm.parts["x_carriage"].anchor("bottom").frame, asm.frame)[
+            0
+        ]
+    )
+    up = up / np.linalg.norm(up)
     for pulley in ("x_pulley", "x_idler_pulley"):
-        p, _ = world(pulley, "belt_plane")
-        assert p[2] == pytest.approx(clamp[2])
+        assert float((world(pulley, "belt_plane") - clamp) @ up) == pytest.approx(
+            0.0, abs=1e-6
+        )
     assert demos.check_layout_interference(layout) == []
 
 
-def test_build_functions_serialize():
-    for build in (demos.build_linear_stage, demos.build_xy_gantry):
-        dag = show_dag(build())
-        assert dag["DAG"][dag["rootNodeId"]]["deps"]["components"]
-
-
 # --------------------------------------------------------------------------- #
-# Bindings
+# Bindings (equal values only)
 # --------------------------------------------------------------------------- #
 
 
-def _binding(layout, name):
-    return next(b for b in layout["bindings"] if b["input"] == name)
+@pytest.mark.parametrize("name", list(LAYOUTS))
+def test_bindings_are_equal_values(name):
+    layout = LAYOUTS[name]
+    items = {e["name"]: e for e in layout["items"]}
+    for top, targets in layout["bindings"].items():
+        assert targets, top
+        for item, comp_input in targets:
+            assert str(items[item]["inputs"][comp_input]) == str(
+                layout["inputs"][top]["default"]
+            ) or float(items[item]["inputs"][comp_input]) == float(
+                layout["inputs"][top]["default"]
+            ), (
+                top,
+                item,
+                comp_input,
+            )
 
 
 @pytest.mark.parametrize("name", list(LAYOUTS))
 def test_rod_binding_covers_rods_bearings_plates_carriages(name):
     layout = LAYOUTS[name]
-    b = _binding(layout, "rod")
-    bound = {t["index"] for t in b["targets"]}
-    for i, e in enumerate(layout["items"]):
+    bound = {item for item, _ in layout["bindings"]["rod"]}
+    for e in layout["items"]:
         cls = e["item"].split(":")[1]
         if cls in (
             "SmoothRod",
@@ -354,42 +443,30 @@ def test_rod_binding_covers_rods_bearings_plates_carriages(name):
             "Carriage",
             "GantryCarriage",
         ):
-            assert i in bound, e["name"]
-    for t in b["targets"]:
-        cls = layout["items"][t["index"]]["item"]
-        if cls == "stdlib:LinearBearing":
-            assert t["map"] == {"8": "LM8UU", "10": "LM10UU", "12": "LM12UU"}
-        else:
-            assert "map" not in t
-    assert b["moves"] == []
+            assert e["name"] in bound, e["name"]
 
 
 @pytest.mark.parametrize(
-    "name,inp",
+    "name,inp,classes",
     [
-        ("linear_stage", "rail_length"),
-        ("xy_gantry", "y_length"),
-        ("xy_gantry", "x_length"),
+        ("linear_stage", "rail_length", {"SmoothRod", "AluExtrusion", "LeadScrewT8"}),
+        ("xy_gantry", "y_length", {"SmoothRod", "AluExtrusion", "LeadScrewT8"}),
+        ("xy_gantry", "x_length", {"SmoothRod", "AluExtrusion"}),
     ],
 )
-def test_length_bindings_reproduce_the_layout(name, inp):
-    """Applying a length binding by hand equals re-running the layout."""
+def test_length_bindings_reproduce_the_layout(name, inp, classes):
+    """Applying a length binding (equal values) equals re-running the layout,
+    inputs-wise; the positions follow through the joints."""
     fn = getattr(demos, f"{name}_layout")
     base = LAYOUTS[name]
-    b = _binding(base, inp)
-    new = b["default"] + 100
-    expected = fn(**{inp: new})["items"]
+    new = base["inputs"][inp]["default"] + 100
+    expected = {e["name"]: e for e in fn(**{inp: new})["items"]}
     items = json.loads(json.dumps(base["items"]))
-    for t in b["targets"]:
-        items[t["index"]]["inputs"][t["input"]] = new + t.get("offset", 0)
-    for m in b["moves"]:
-        tr = items[m["index"]]["translate"]
-        items[m["index"]]["translate"] = [
-            v + 100 * d for v, d in zip(tr, m["per_unit"])
-        ]
-    for got, want in zip(items, expected):
-        assert got["inputs"] == want["inputs"], got["name"]
-        assert got["translate"] == pytest.approx(want["translate"]), got["name"]
-    # rods follow the length input directly
-    direct = {items[t["index"]]["item"] for t in b["targets"] if "offset" not in t}
-    assert "stdlib:SmoothRod" in direct
+    by_name = {e["name"]: e for e in items}
+    for item, comp_input in base["bindings"][inp]:
+        by_name[item]["inputs"][comp_input] = new
+    for e in items:
+        assert e["inputs"] == expected[e["name"]]["inputs"], e["name"]
+    assert {
+        by_name[i]["item"].split(":")[1] for i, _ in base["bindings"][inp]
+    } == classes

@@ -1,5 +1,6 @@
 from cadbuildr.foundation import Part, Sketch, Circle, Extrusion
 from cadbuildr.foundation.library import OneOf, part
+from cadbuildr.foundation.interfaces import NutSeat, ScrewHole
 from cadbuildr.stdlib.common import add_axial_anchors
 from typing import ClassVar
 
@@ -77,6 +78,11 @@ class DIN125Washer(Washer):
             inner_radius=specs["inner_radius"],
             thickness=specs["thickness"],
         )
+        # Interfaces: the washer sits on a hole face (bottom) and offers one
+        # to the head / nut that lands on it (top).
+        self.size = size
+        self.add_interface(NutSeat(size=size), "bottom")
+        self.add_interface(ScrewHole(size=size, depth=specs["thickness"]), "top")
 
         # Store additional attributes specific to DIN125Washer
         self.size = size

@@ -3,6 +3,7 @@
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion
+from cadbuildr.foundation.interfaces import BearingFace, Bore
 from cadbuildr.foundation.library import OneOf, part
 from cadbuildr.stdlib.common import STEEL, BLACK_OXIDE, add_axial_anchors
 
@@ -74,6 +75,10 @@ class DeepGrooveBearing(Part):
         # for a RevoluteJoint / CylindricalJoint onto a shaft).
         self.bore_radius, self.outer_radius, self.width = bore_r, outer_r, width
         add_axial_anchors(self, width)
+        # Interfaces: either ring face on a BearingSeat, the bore on a Shaft.
+        for face in ("bottom", "top"):
+            self.add_interface(BearingFace(model=model, d=b["d"]), face)
+        self.add_interface(Bore(d=b["d"]), "axis")
         self.paint(STEEL)
         self.shield_color = BLACK_OXIDE
         self.model = model

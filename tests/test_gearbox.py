@@ -1,14 +1,17 @@
 """Spur gear reducer: library parts, the GearStage assembly and the click-demo
-placement tables (single and two stage)."""
+connect sequences (single and two stage)."""
 
 import json
 import math
+import os
 
 import numpy as np
 import pytest
 
 from cadbuildr.foundation.dag_utils import show_dag
-from cadbuildr.foundation.interference import estimate_part_extents
+from cadbuildr.foundation.interference import _rotation, estimate_part_extents
+from cadbuildr.foundation.interfaces import IncompatibleInterfaces
+from cadbuildr.foundation.library.layout import build_layout, validate_layout
 from cadbuildr.foundation.library import get_manifest
 from cadbuildr.foundation.library.evaluate import evaluate
 from cadbuildr.foundation.math_utils import tf_relative_to_frame
@@ -76,6 +79,8 @@ def test_gearbox_manifest_items():
         "bearing",
     ]
     assert {"input", "output"} <= set(stage["anchors"])
+    exposed = {i["name"]: i["type"] for i in stage["interfaces"]}
+    assert exposed == {"input": "ShaftEnd", "output": "ShaftEnd"}
     sections = {s["id"]: s["items"] for s in MANIFEST["toolbar"]["sections"]}
     assert {"stdlib:GearboxPlate", "stdlib:Spacer", "stdlib:GearStage"} <= set(
         sections["gearbox"]
@@ -124,15 +129,17 @@ def test_ratio_presets_keep_centre_distance():
 
 
 # --------------------------------------------------------------------------- #
-# Layouts
+# Layouts (connect sequences)
 # --------------------------------------------------------------------------- #
 
 LAYOUTS = {
     "single": single_stage_layout(),
-    "single_vertical": single_stage_layout(horizontal=False),
     "two": two_stage_layout(),
     "two_live": two_stage_layout(stage2_as_assembly=True),
 }
+REFERENCE = json.load(
+    open(os.path.join(os.path.dirname(__file__), "data", "layouts_at_9466104.json"))
+)
 
 
 def test_part_counts():
@@ -157,15 +164,21 @@ def test_part_counts():
 
 
 @pytest.mark.parametrize("name", sorted(LAYOUTS))
-def test_layout_shape_and_single_axis_rotations(name):
+def test_layout_shape(name):
     layout = LAYOUTS[name]
-    json.dumps(layout)
-    assert layout["warnings"] == []
+    validate_layout(layout)
+    assert layout["items"][0]["connect"] is None
     for it in layout["items"]:
-        assert set(it) >= {"item", "inputs", "translate", "rotate"}
-        assert it["item"].startswith("stdlib:") and len(it["translate"]) == 3
-        rot = it["rotate"]
-        assert rot is None or (set(rot) == {"axis", "angle"} and rot["axis"] in "XYZ")
+        assert it["item"].startswith("stdlib:")
+
+
+@pytest.mark.parametrize("name", sorted(LAYOUTS))
+def test_every_part_placed_by_exactly_one_connect(name):
+    asm = build_layout(LAYOUTS[name])
+    assert len(asm.joints) == len(asm.components) - 1
+    assert [i for i in asm.check() if i["severity"] != "info"] == []
+    dag = show_dag(asm)
+    assert [c for c in dag["checks"] if c["severity"] != "info"] == []
 
 
 @pytest.mark.parametrize("name", ["single", "two_live"])
@@ -173,19 +186,20 @@ def test_bindings(name):
     layout = LAYOUTS[name]
     b = layout["bindings"]
     assert set(b) == {"module", "z_pinion", "z_gear", "bearing"}
-    items = layout["items"]
-    by_target = {(items[i]["item"], inp) for i, inp in b["bearing"]}
+    items = {it["name"]: it for it in layout["items"]}
+    by_target = {(items[n]["item"], inp) for n, inp in b["bearing"]}
     assert ("stdlib:DeepGrooveBearing", "model") in by_target
     assert ("stdlib:GearboxPlate", "bearing") in by_target
     for top, targets in b.items():
-        for i, inp in targets:
-            assert items[i]["bindings"][inp] == top
-            assert items[i]["inputs"][inp] == layout["inputs"][top]
-    gear_items = {items[i]["item"] for i, _ in b["z_gear"]}
+        for n, inp in targets:
+            assert (
+                items[n]["inputs"][inp] == layout["inputs"][top]["default"]
+            )  # equal values
+    gear_items = {items[n]["item"] for n, _ in b["z_gear"]}
     assert "stdlib:GearboxPlate" in gear_items
     if name == "single":
         assert len(b["bearing"]) == 6 and len(b["module"]) == 4
-    assert layout["widgets"]["bearing"]["kind"] == "enum"
+    assert layout["inputs"]["bearing"]["widget"]["kind"] == "enum"
 
 
 def _unique_requests():
@@ -201,30 +215,113 @@ def _unique_requests():
     "request_", _unique_requests(), ids=lambda r: r["item"].split(":")[1]
 )
 def test_every_layout_item_evaluates(request_):
-    result = evaluate(request_)
+    result = evaluate(dict(request_, interfaces=True))
     assert result["ok"], result.get("error")
-    assert result["dag"]["DAG"]
+    assert result["dag"]["DAG"] and result["interfaces"]
 
 
-def _world_items(layout):
-    """{name: (translate, rotate)} of a layout."""
-    return {it["name"]: it for it in layout["items"]}
+def _boxes(asm, ref):
+    roots = {r.name.value: r for r in asm.components}
+    r0 = roots[ref]
+    R0, P0 = _rotation(r0.frame.quaternion), np.array(r0.frame.position, float)
+    out = {}
+    for name, root in roots.items():
+        if type(root).__name__ == "AssemblyRoot":
+            continue
+        ext = estimate_part_extents(root)
+        R, P = _rotation(root.frame.quaternion), np.array(root.frame.position, float)
+        corners = (np.vstack([b.corners() for b in ext.boxes]) @ R.T + P - P0) @ R0
+        out[name] = (corners.min(axis=0), corners.max(axis=0))
+    return out
+
+
+@pytest.mark.parametrize(
+    "values,ref_key",
+    [
+        ({}, "single_stage"),
+        (
+            {"module": 1.5, "z_pinion": 12, "z_gear": 40, "bearing": "688"},
+            "single_stage_15_12_40_688",
+        ),
+    ],
+)
+def test_solved_positions_match_the_old_coordinate_tables(values, ref_key):
+    """Boxes relative to plate A equal the coordinate tables of git 9466104,
+    also with another module / tooth split / bearing (the joints re-space)."""
+    got = _boxes(build_single_stage(**values), "plate_a")
+    want = REFERENCE[ref_key]
+    assert set(got) == set(want)
+    for name, (lo, hi) in want.items():
+        assert np.allclose(got[name][0], lo, atol=1e-3), name
+        assert np.allclose(got[name][1], hi, atol=1e-3), name
+
+
+def test_two_stage_live_matches_the_old_table():
+    asm = build_two_stage(stage2_as_assembly=True)
+    got = _boxes(asm, "s1.plate_a")
+    want = REFERENCE["two_stage_live"]
+    assert set(got) == set(want)
+    for name, (lo, hi) in want.items():
+        assert np.allclose(got[name][0], lo, atol=1e-3), name
+    roots = {r.name.value: r for r in asm.components}
+    p0, stage = roots["s1.plate_a"].frame, roots["s2.stage"].frame
+    from cadbuildr.foundation.math_utils import compose_tf, invert_tf
+
+    t, q = compose_tf(
+        *invert_tf(p0.position, p0.quaternion), stage.position, stage.quaternion
+    )
+    ref = REFERENCE["two_stage_live_stage_frame"]
+    assert t == pytest.approx(ref["position"], abs=1e-3)
+    assert (
+        min(
+            np.abs(np.array(q) - ref["quaternion"]).max(),
+            np.abs(np.array(q) + ref["quaternion"]).max(),
+        )
+        < 1e-6
+    )
 
 
 def test_output_shaft_at_centre_distance():
-    for layout in (LAYOUTS["single"], LAYOUTS["single_vertical"]):
-        items = _world_items(layout)
-        for a, b in (("shaft_in", "shaft_out"), ("bearing_in_b", "bearing_out_b")):
-            d = np.array(items[b]["translate"]) - np.array(items[a]["translate"])
-            assert d[0] == pytest.approx(layout["center_distance"]) == pytest.approx(44)
-        assert d[1] == d[2] == 0
-    two = _world_items(LAYOUTS["two"])
-    # stage 2 input axis is coaxial with stage 1 output.
-    s1, s2 = two["s1.shaft_out"]["translate"], two["s2.shaft_in"]["translate"]
-    assert (s1[0], s1[2]) == pytest.approx((s2[0], s2[2]))
+    asm = build_single_stage()
+
+    def world(part, anchor):
+        t, _ = tf_relative_to_frame(asm.parts[part].anchor(anchor).frame, asm.frame)
+        return np.array(t)
+
+    d = world("shaft_out", "axis") - world("shaft_in", "axis")
+    assert d[0] == pytest.approx(44) and d[1] == pytest.approx(0)
+    two = build_two_stage()
+    p = {
+        n: np.array(
+            tf_relative_to_frame(two.parts[n].anchor("axis").frame, two.frame)[0]
+        )
+        for n in ("s1.shaft_out", "s2.shaft_in")
+    }
+    assert p["s1.shaft_out"][:2] == pytest.approx(p["s2.shaft_in"][:2])  # coaxial
 
 
-# 2D tooth overlap at the placed positions (stage frame, vertical layout).
+@pytest.mark.parametrize(
+    "module,z1,z2,bearing",
+    [(2, 11, 33, "608"), (1.5, 12, 40, "688"), (1, 20, 21, "623")],
+)
+def test_changing_module_teeth_bearing_stays_consistent(module, z1, z2, bearing):
+    asm = build_single_stage(module=module, z_pinion=z1, z_gear=z2, bearing=bearing)
+    assert [i for i in asm.check() if i["severity"] != "info"] == []
+    boxes = _world_boxes(asm)
+    assert _connected(boxes)
+
+
+def test_a_stale_component_input_is_refused_at_its_connect():
+    """Switch the bearing but not the shafts: the shaft no longer fits."""
+    layout = single_stage_layout()
+    for it in layout["items"]:
+        if it["item"] == "stdlib:DeepGrooveBearing":
+            it["inputs"]["model"] = "6800"  # 10 mm bore, the shafts stay 8 mm
+    with pytest.raises(IncompatibleInterfaces):
+        build_layout(layout)
+
+
+# 2D tooth overlap at the solved positions (stage frame).
 
 
 def _poly(points, angle_deg, dx):
@@ -255,37 +352,31 @@ def _overlap(a, b, centre, zone):
     return any(_inside(p, b) for p in near(a)) or any(_inside(p, a) for p in near(b))
 
 
-@pytest.mark.parametrize("z1,z2", [(11, 33), (12, 40), (13, 31)])
-def test_gears_mesh_without_overlap_at_layout_positions(z1, z2):
-    layout = single_stage_layout(z_pinion=z1, z_gear=z2, horizontal=False)
-    items = _world_items(layout)
-    pin, gear = items["pinion"], items["gear"]
+def _yaw_deg(q):
+    return math.degrees(2 * math.atan2(q[3], q[0]))
+
+
+@pytest.mark.parametrize("z1,z2", [(11, 33), (12, 40), (13, 31), (12, 32)])
+def test_gears_mesh_without_overlap_at_solved_positions(z1, z2):
+    asm = build_single_stage(z_pinion=z1, z_gear=z2)
+    roots = {r.name.value: r for r in asm.components}
+    pin, gear = roots["pinion"].frame, roots["gear"].frame
     m = 2.0
-    cd = gear["translate"][0] - pin["translate"][0]
+    cd = gear.position[0] - pin.position[0]
     assert cd == pytest.approx(m * (z1 + z2) / 2)
-    assert pin["translate"][1:] == gear["translate"][1:]
-    phase = (gear["rotate"] or {"angle": 0.0})["angle"]
-    a = _poly(spur_gear_outline(m, z1), 0.0, 0.0)
+    assert pin.position[1:] == pytest.approx(gear.position[1:])
+    a = _poly(spur_gear_outline(m, z1), _yaw_deg(pin.quaternion), 0.0)
+    phase = _yaw_deg(gear.quaternion)
     b = _poly(spur_gear_outline(m, z2), phase, cd)
     assert not _overlap(a, b, (m * z1 / 2, 0.0), 4 * m)
-    # Control: half a tooth off overlaps.
     bad = _poly(spur_gear_outline(m, z2), phase + 180.0 / z2, cd)
     assert _overlap(a, bad, (m * z1 / 2, 0.0), 4 * m)
-    # Tips reach into the other gear's tooth space (they actually mesh).
-    assert m * z1 / 2 + m + m * z2 / 2 + m > cd + m
-
-
-def test_even_gear_horizontal_warns():
-    layout = single_stage_layout(z_pinion=12, z_gear=40)
-    assert layout["warnings"] and "even" in layout["warnings"][0]
 
 
 # No floating part: the contact graph of world bounding boxes is connected.
 
 
 def _world_boxes(assembly):
-    from cadbuildr.foundation.interference import _rotation
-
     boxes = []
     for root in assembly.components:
         ext = estimate_part_extents(root)
@@ -319,7 +410,6 @@ def test_no_floating_part(builder):
     boxes = _world_boxes(asm)
     assert len(boxes) == asm.layout["part_count"]
     assert _connected(boxes)
-    # Control: a part moved away is detected.
     lo, hi = boxes[0]
     assert not _connected(boxes[:1] + [(lo + 500, hi + 500)] + boxes[1:])
 
@@ -341,7 +431,7 @@ def test_gear_stage_evaluates():
 
 def test_gear_stage_matches_layout_and_binds_its_inputs():
     stage = GearStage()
-    asm = build_single_stage(horizontal=False)
+    asm = build_single_stage()
     assert len(stage.components) == len(asm.components) == 30
     for a, b in zip(stage.components, asm.components):
         assert a.frame.position == pytest.approx(b.frame.position)
@@ -380,10 +470,14 @@ def test_gear_stage_matches_layout_and_binds_its_inputs():
 def test_gear_stage_phases_an_even_gear():
     stage = GearStage(z_pinion=12, z_gear=32)
     gear = stage.stage_parts["gear"]
-    root = stage.components[[c for c in stage.stage_parts].index("gear")]
+    from cadbuildr.foundation.compute_functions import _SOURCE_COMPONENT_ATTR
+
+    root = next(
+        c for c in stage.components if getattr(c, _SOURCE_COMPONENT_ATTR) is gear
+    )
     assert gear.teeth == 32
     # 180/32 deg about Z
-    w = root.frame.quaternion[0]
+    w = abs(root.frame.quaternion[0])  # q and -q are the same rotation
     assert math.degrees(2 * math.acos(w)) == pytest.approx(180 / 32)
 
 

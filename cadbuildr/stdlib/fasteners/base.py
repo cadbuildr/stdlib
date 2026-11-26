@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any, Optional, Protocol
 
 from cadbuildr.foundation import Part, make_anchor
+from cadbuildr.foundation.interfaces import ScrewHead, ScrewTip
 
 
 class ScrewLike(Protocol):
@@ -52,8 +53,12 @@ class Fastener(Part):
         self.body_radius = float(body_radius)
         self.body_height = float(body_height)
         seat = self.body_height if seat_z is None else float(seat_z)
-        self.add_anchor(make_anchor("head_seat", (0.0, 0.0, seat), z_down=True))
-        self.add_anchor(make_anchor("tip", (0.0, 0.0, 0.0), z_down=True))
+        head = self.add_anchor(make_anchor("head_seat", (0.0, 0.0, seat), z_down=True))
+        tip = self.add_anchor(make_anchor("tip", (0.0, 0.0, 0.0), z_down=True))
+        # Interfaces: the head lands on a ScrewHole, a nut runs on from the tip.
+        size = f"M{2.0 * self.body_radius:g}"
+        self.add_interface(ScrewHead(size=size, length=self.body_height), head)
+        self.add_interface(ScrewTip(size=size), tip)
 
 
 def _missing_contract(screw: Any) -> list[str]:

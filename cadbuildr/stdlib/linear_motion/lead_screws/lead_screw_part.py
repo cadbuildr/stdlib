@@ -4,6 +4,8 @@ import math
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
+from cadbuildr.foundation.interfaces import Bore, PlaneFace, ScrewHole
+from cadbuildr.foundation.interfaces.features import ShaftFeature
 from cadbuildr.foundation.library import Num, part
 from cadbuildr.stdlib.common import (
     BRASS,
@@ -33,11 +35,18 @@ class LeadScrewT8(Part):
         self,
         length: Num(min=50, max=1000, step=10) = 300,
         with_thread: bool = True,
+        trim: Num(min=0, max=200, step=1) = 0,
     ):
         """Args:
-        length: screw length, end to end.
+        length: nominal length (e.g. the rail length the screw spans).
         with_thread: model the helical thread (slower to render).
+        trim: cut this much off ``length`` (the screw is ``length - trim``
+            long: the coupling / motor stick-out), so ``length`` can follow
+            the same input as the rails.
         """
+        length = float(length) - float(trim)
+        if length <= 0:
+            raise ValueError("trim leaves no screw")
         self.length = length
         radius = _T8_MAJOR / 2
         H = _T8_PITCH * math.sqrt(3) / 2
@@ -51,6 +60,8 @@ class LeadScrewT8(Part):
         # ``bore_b_stop``; a LeadScrewNutT8 rides ``axis`` (ScrewJoint, pitch 2).
         self.radius, self.pitch = radius, _T8_PITCH
         add_axial_anchors(self, length, ends=("end_a", "end_b"))
+        # Interfaces: Shaft on the axis (bearings, nut), ShaftEnd at both ends.
+        ShaftFeature(self, d=_T8_MAJOR, length=length)
         self.paint(STAINLESS)
 
 
@@ -124,5 +135,18 @@ class LeadScrewNutT8(Part):
                 make_anchor(
                     f"mount_hole_{i}", (r * math.cos(a), r * math.sin(a), self.FLANGE_H)
                 )
+            )
+        # Interfaces: the flange shoulder on a face (PlaneFace), the bore on
+        # the lead screw (Bore), and one ScrewHole per flange hole on the
+        # flange underside (screw heads there, group "flange").
+        self.add_interface(PlaneFace(), "flange_seat")
+        self.add_interface(Bore(d=_T8_MAJOR), "axis")
+        for i in range(4):
+            a = math.radians(45 + 90 * i)
+            hole = make_anchor(
+                f"flange_hole_{i}", (r * math.cos(a), r * math.sin(a), 0.0), z_down=True
+            )
+            self.add_interface(
+                ScrewHole(size="M4", depth=self.FLANGE_H), hole, group="flange"
             )
         self.paint(BRASS)

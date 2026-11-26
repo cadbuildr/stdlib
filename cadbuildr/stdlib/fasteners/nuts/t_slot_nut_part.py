@@ -3,6 +3,7 @@
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Circle, Extrusion, make_anchor
+from cadbuildr.foundation.interfaces import NutSeat, TSlotNutSeat
 from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
 from cadbuildr.stdlib.common import (
     rectangle_shape,
@@ -56,5 +57,16 @@ class TSlotNut(Part):
         self.thickness = total_h
         add_axial_anchors(self, total_h)
         self.add_anchor(make_anchor("flange_seat", (0.0, 0.0, self.FLANGE_H)))
+        # Interfaces: the neck top (flush with the profile face) takes the
+        # screw's clamped face (NutSeat on ``top``) and sits in a 6 mm slot
+        # (``slot_seat``, same place, +X along the slot).
+        self.add_interface(NutSeat(size=size), "top")
+        seat = make_anchor(
+            "slot_seat",
+            (0.0, 0.0, total_h),
+            z_axis=(0.0, 0.0, 1.0),
+            x_axis=(0.0, 1.0, 0.0),
+        )
+        self.add_interface(TSlotNutSeat(slot=6), seat)
         self.paint("grey")
         self.size = size

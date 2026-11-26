@@ -3,6 +3,7 @@
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
+from cadbuildr.foundation.interfaces import TSlot
 from cadbuildr.foundation.library import Num, OneOf, part
 from cadbuildr.stdlib.common import (
     ALUMINIUM,
@@ -36,14 +37,21 @@ class AluExtrusion(Part):
         self,
         series: OneOf[GEOMETRY] = "2020",
         length: Num(min=20, max=1000, step=10) = 100,
+        trim: Num(min=0, max=200, step=1) = 0,
     ):
         """Args:
         series: profile series (``2020`` or ``2040``, 6 mm slot).
-        length: cut length along the profile (+Z).
+        length: nominal length along the profile (+Z).
+        trim: cut this much off ``length`` (the profile is ``length - trim``),
+            so ``length`` can follow the same input as rods or other rails.
         """
+        length = float(length) - float(trim)
+        if length <= 0:
+            raise ValueError("trim leaves no profile")
         if series not in self.GEOMETRY:
             raise ValueError(f"Unknown series '{series}'.")
         g = self.GEOMETRY[series]
+        self.series_name = series
         w, h, cells = g["w"], g["h"], g["cells"]
 
         # Solid bar.
@@ -84,6 +92,8 @@ class AluExtrusion(Part):
         self.add_anchor(
             make_anchor(name, position, z_axis=normal, x_axis=(0.0, 0.0, 1.0))
         )
+        # Interface: the slot opening (T-nuts slide in; profiles / faces sit on it).
+        self.add_interface(TSlot(series=self.series_name, slot=_SLOT), name)
         self.slot_names.append(name)
 
     def slot_anchor(self, slot: str, at: float, name: str | None = None):

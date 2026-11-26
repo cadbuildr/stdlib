@@ -12,25 +12,13 @@ from cadbuildr.stdlib.bearings.ball_bearings.deep_groove_part import (
 from cadbuildr.stdlib.fasteners.nuts.hex_din934_part import HexNut
 from cadbuildr.stdlib.fasteners.screws_and_bolts.din912_part import DIN912Screw
 from cadbuildr.stdlib.fasteners.washers.din125_part import DIN125Washer
-from cadbuildr.stdlib.gearbox.geometry import StageGeometry, stage_items
+from cadbuildr.stdlib.gearbox.geometry import StageGeometry, stage_items, stage_loops
 from cadbuildr.stdlib.gearbox.plate_part import GearboxPlate
 from cadbuildr.stdlib.gearbox.spacer_part import Spacer
 from cadbuildr.stdlib.power_transmission.gears.spur_gear_part import SpurGear
 from cadbuildr.stdlib.power_transmission.shafts.base_part import Shaft
 
 BEARINGS: dict = DeepGrooveBearing.TABLE
-
-
-def rot_deg_of(rotate: Any) -> Any:
-    """A placement's ``{"axis", "angle"}`` as ``add_component(rot_deg=...)``."""
-    if not rotate or not rotate.get("angle"):
-        return None
-    angle = float(rotate["angle"])
-    return {
-        "X": (angle, 0.0, 0.0),
-        "Y": (0.0, angle, 0.0),
-        "Z": (0.0, 0.0, angle),
-    }[rotate["axis"]]
 
 
 @assembly(
@@ -43,7 +31,9 @@ class GearStage(Assembly):
     """Spur gear stage (shafts along +Z; input on the origin, output at
     ``x = module * (z_pinion + z_gear) / 2``; plate A outer face on z=0).
 
-    The gear is phased half a tooth for an even ``z_gear`` so the teeth mesh.
+    Built as a connect sequence (plate A grounded); the gear is phased half a
+    tooth for an even ``z_gear`` (its joint angle) so the teeth mesh.
+    Interfaces: ``input`` / ``output`` (``ShaftEnd``, exposed from the shafts).
     Anchors: ``input`` / ``output`` shaft tips (outward along the shaft),
     ``input_axis`` / ``output_axis`` (+Z along each shaft on plate A's outer
     face), ``face_a`` / ``face_b`` (outer plate faces, outward normals).
@@ -98,10 +88,23 @@ class GearStage(Assembly):
             parts[f"nut_{i}"] = HexNut(size=g.screw, with_thread=False)
         assert set(parts) == set(by_role), set(parts) ^ set(by_role)
 
+        # Placed by connects only: plate A grounded, everything else mated
+        # by its interfaces (the same sequence as the click-built demo).
         for it in items:
-            self.add_component(
-                parts[it["role"]], at=it["translate"], rot_deg=rot_deg_of(it["rotate"])
+            part_ = parts[it["role"]]
+            link = it["connect"]
+            if link is None:
+                self.ground(part_)
+                continue
+            target, iface = link["target"]
+            self.connect(
+                part_.interface(link["own"]),
+                parts[target].interface(iface),
+                **link["dof"],
             )
+        for loop in stage_loops():
+            (a, ai), (b, bi) = loop["a"], loop["b"]
+            self.connect(parts[a].interface(ai), parts[b].interface(bi))
 
         self.geometry = g
         self.stage_parts = parts
@@ -114,8 +117,9 @@ class GearStage(Assembly):
         self.center_distance = g.center_distance
         self.ratio = g.ratio
         cd, h, e = g.center_distance, g.height, g.shaft_extension
-        self.add_anchor(make_anchor("input", (0.0, 0.0, -e), z_down=True))
-        self.add_anchor(make_anchor("output", (cd, 0.0, h + e)))
+        # The stage is connected by its shaft ends (ShaftEnd interfaces).
+        self.expose(parts["shaft_in"].interface("end_a"), as_="input")
+        self.expose(parts["shaft_out"].interface("end_b"), as_="output")
         self.add_anchor(make_anchor("input_axis", (0.0, 0.0, 0.0)))
         self.add_anchor(make_anchor("output_axis", (cd, 0.0, 0.0)))
         self.add_anchor(make_anchor("face_a", (0.0, 0.0, 0.0), z_down=True))

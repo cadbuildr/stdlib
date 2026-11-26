@@ -11,6 +11,7 @@ from cadbuildr.foundation import (
     Sketch,
     make_anchor,
 )
+from cadbuildr.foundation.interfaces import Bore
 from cadbuildr.foundation.library import Num, part
 from cadbuildr.stdlib.common import STEEL, add_axial_anchors
 
@@ -125,4 +126,6 @@ class SpurGear(Part):
         self.bore = bore
         add_axial_anchors(self, face_width)
         self.add_anchor(make_anchor("pitch_plane", (0.0, 0.0, face_width / 2)))
+        # Interface: the bore on a Shaft (CylindricalJoint: offset + mesh phase).
+        self.add_interface(Bore(d=bore), "axis")
         self.paint(STEEL)

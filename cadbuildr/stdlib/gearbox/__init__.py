@@ -3,11 +3,11 @@
     from cadbuildr.stdlib.gearbox import GearStage, single_stage_layout
     stage = GearStage(module=2, z_pinion=11, z_gear=33, bearing="608")
 
-:mod:`.demos` holds the placement tables of the click-only reducer demo
-(single and two stage) and builds the same assemblies in code.
+:mod:`.demos` holds the click-only reducer demo (single and two stage) as
+connect sequences and builds the same assemblies in code.
 """
 
-from cadbuildr.stdlib.gearbox.geometry import StageGeometry, stage_items
+from cadbuildr.stdlib.gearbox.geometry import StageGeometry, stage_items, stage_loops
 from cadbuildr.stdlib.gearbox.plate_part import GearboxPlate
 from cadbuildr.stdlib.gearbox.spacer_part import Spacer
 from cadbuildr.stdlib.gearbox.stage import GearStage
@@ -29,5 +29,6 @@ __all__ = [
     "ratio_presets",
     "single_stage_layout",
     "stage_items",
+    "stage_loops",
     "two_stage_layout",
 ]

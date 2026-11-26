@@ -1,4 +1,5 @@
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion
+from cadbuildr.foundation.interfaces.features import ShaftFeature
 from cadbuildr.foundation.library import Num, part
 from cadbuildr.stdlib.common import add_axial_anchors
 
@@ -26,6 +27,8 @@ class Shaft(Part):
         self.create_shaft()
         # Anchors: end faces + axis.
         add_axial_anchors(self, length, ends=("end_a", "end_b"))
+        # Interfaces: Shaft on the axis (bores ride it), ShaftEnd at each end.
+        ShaftFeature(self, d=diameter, length=length)
 
     def create_shaft(self):
         s = Sketch(self.xy())

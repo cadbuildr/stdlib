@@ -48,6 +48,7 @@ def _lead_nut(p):
     for i in range(4):
         a = math.radians(45 + 90 * i)
         out[f"mount_hole_{i}"] = ((r * math.cos(a), r * math.sin(a), p.FLANGE_H), UP)
+        out[f"flange_hole_{i}"] = ((r * math.cos(a), r * math.sin(a), 0), DOWN)
     return out
 
 
@@ -79,6 +80,8 @@ def _rod_end_plate(p):
     for tag, y in (("a", -s / 2), ("b", s / 2)):
         out[f"rod_hole_{tag}"] = ((0, y, _ROD_Z), PX)
         out[f"foot_hole_{tag}"] = ((t + 10, y, 8), UP)
+        out[f"foot_nut_{tag}"] = ((t + 10, y, 0), DOWN)
+        out[f"rail_seat_{tag}"] = ((0, y, 0), DOWN)
     if p.motor:
         hp = _NEMA_PITCH[p.nema] / 2
         out["motor_face"] = ((0, 0, _ROD_Z), NX)
@@ -129,6 +132,8 @@ def _gantry_carriage(p):
     hw, xs = p.width / 2, p.x_spacing / 2
     out["x_rod_hole_a"] = ((-xs, hw, 24), NY)
     out["x_rod_hole_b"] = ((xs, hw, 24), NY)
+    out["x_rod_exit_a"] = ((-xs, -hw, 24), PY)
+    out["x_rod_exit_b"] = ((xs, -hw, 24), PY)
     for side, sign, n in (("p", 1, PY), ("n", -1, NY)):
         out[f"side_face_{side}"] = ((0, sign * hw, 24), n)
         out[f"side_hole_{side}0"] = ((-15, sign * hw, 24), n)
@@ -177,6 +182,7 @@ EXPECTED = {
     "t-slot-nut-6mm": lambda p: {
         **_axial(p.thickness),
         "flange_seat": ((0, 0, p.FLANGE_H), UP),
+        "slot_seat": ((0, 0, p.thickness), UP),
     },
     # washers
     "din125-flat-washer": lambda p: _axial(p.thickness),
@@ -233,6 +239,7 @@ def _gearbox_plate(p):
     }
     for i, (x, y) in enumerate(g.hole_positions(), start=1):
         out[f"hole_{i}"] = ((x, y, 0), DOWN)
+        out[f"hole_{i}_in"] = ((x, y, t), UP)
     for i, (x, y) in enumerate(g.mount_positions(), start=1):
         out[f"mount_{i}"] = ((x, y, 0), DOWN)
     return out

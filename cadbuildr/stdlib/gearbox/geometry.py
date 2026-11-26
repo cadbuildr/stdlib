@@ -2,7 +2,7 @@
 
 Everything here is plain numbers (no CAD objects), shared by
 :class:`~cadbuildr.stdlib.gearbox.plate_part.GearboxPlate`,
-:class:`~cadbuildr.stdlib.gearbox.stage.GearStage` and the placement tables
+:class:`~cadbuildr.stdlib.gearbox.stage.GearStage` and the connect sequences
 in :mod:`cadbuildr.stdlib.gearbox.demos`, so all three agree by construction.
 
 Stage frame (mm): shafts along +Z, the input (pinion) axis on the origin, the
@@ -243,41 +243,45 @@ class StageGeometry:
 
 
 # --------------------------------------------------------------------------- #
-# Placements (stage frame)
+# The stage as a connect sequence (no positions)
 # --------------------------------------------------------------------------- #
 
-FLIP_X = {"axis": "X", "angle": 180.0}
+# plate B is plate A turned 180 deg about X: its corner hole k faces plate A's i.
+MIRROR = {1: 4, 2: 3, 3: 2, 4: 1}
 
 
-def _item(
-    role: str,
-    cls: str,
-    inputs: Dict[str, Any],
-    translate: tuple,
-    rotate: Optional[Dict[str, Any]] = None,
-    bind: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
+def _item(role, cls, inputs, connect=None, bind=None):
     return {
         "role": role,
         "item": f"stdlib:{cls}",
         "inputs": dict(inputs),
-        "translate": [float(v) for v in translate],
-        "rotate": dict(rotate) if rotate else None,
+        "connect": connect,
         "bind": dict(bind or {}),
     }
 
 
-def stage_items(g: StageGeometry, threads: bool = False) -> List[Dict[str, Any]]:
-    """Every part of one stage, placed in the stage frame.
+def _to(own, role, iface, **dof):
+    return {
+        "own": own,
+        "target": [role, iface],
+        "dof": {k: float(v) for k, v in dof.items()},
+    }
 
-    Each entry: ``role``, ``item`` (``stdlib:<Cls>``), ``inputs``,
-    ``translate`` [x, y, z], ``rotate`` ({axis, angle} about the part's own
-    origin, applied before the translation) or None, and ``bind``:
-    {component input: stage input} for the inputs that follow the stage's
-    ``module`` / ``z_pinion`` / ``z_gear`` / ``bearing``.
+
+def stage_items(
+    g: StageGeometry, threads: bool = False, root: str = "plate", entry: Any = None
+) -> List[Dict[str, Any]]:
+    """Every part of one stage as a connect sequence, in dependency order.
+
+    Each entry: ``role``, ``item`` (``stdlib:<Cls>``), ``inputs``, ``connect``
+    (``{own, target: [role, interface], dof}`` or None) and ``bind``
+    ({component input: stage input}). ``root="plate"``: plate A is grounded
+    (``connect`` None); ``root="input"``: the input shaft's ``end_a`` connects
+    to ``entry`` (``[item, interface]`` outside the stage) and the stage
+    hangs from it. Loop closures: :func:`stage_loops`.
     """
     g.check()
-    cd, t, h = g.center_distance, g.thickness, g.height
+    cd, t, e = g.center_distance, g.thickness, g.shaft_extension
     plate_inputs = dict(
         module=g.module,
         z_pinion=g.z_pinion,
@@ -287,102 +291,159 @@ def stage_items(g: StageGeometry, threads: bool = False) -> List[Dict[str, Any]]
         thickness=g.thickness,
     )
     plate_bind = {k: k for k in ("module", "z_pinion", "z_gear", "bearing")}
-    out = [
-        _item("plate_a", "GearboxPlate", plate_inputs, (0, 0, 0), None, plate_bind),
-        _item("plate_b", "GearboxPlate", plate_inputs, (0, 0, h), FLIP_X, plate_bind),
-    ]
     d = g.shaft_diameter
-    out.append(
+    bearing = dict(model=g.bearing)
+    bbind = {"model": "bearing"}
+    shaft_in = _item("shaft_in", "Shaft", dict(diameter=d, length=g.input_shaft_length))
+    if root == "plate":
+        out = [
+            _item("plate_a", "GearboxPlate", plate_inputs, None, plate_bind),
+            _item(
+                "bearing_in_a",
+                "DeepGrooveBearing",
+                bearing,
+                _to("top", "plate_a", "seat_in"),
+                bbind,
+            ),
+            dict(shaft_in, connect=_to("axis", "bearing_in_a", "axis", offset=-e)),
+        ]
+    else:
+        out = [
+            dict(shaft_in, connect={"own": "end_a", "target": list(entry), "dof": {}}),
+            # the bearing rides the shaft e from its end
+            _item(
+                "bearing_in_a",
+                "DeepGrooveBearing",
+                bearing,
+                _to("axis", "shaft_in", "axis", offset=e),
+                bbind,
+            ),
+            _item(
+                "plate_a",
+                "GearboxPlate",
+                plate_inputs,
+                _to("seat_in", "bearing_in_a", "top"),
+                plate_bind,
+            ),
+        ]
+    out += [
         _item(
-            "shaft_in",
-            "Shaft",
-            dict(diameter=d, length=g.input_shaft_length),
-            (0, 0, -g.shaft_extension),
-        )
-    )
-    out.append(
+            "bearing_out_a",
+            "DeepGrooveBearing",
+            bearing,
+            _to("top", "plate_a", "seat_out"),
+            bbind,
+        ),
         _item(
             "shaft_out",
             "Shaft",
             dict(diameter=d, length=g.output_shaft_length),
-            (cd, 0, 0),
-        )
-    )
-    gear_z = t + g.gear_gap
-    out.append(
-        _item(
-            "pinion",
-            "SpurGear",
-            dict(module=g.module, teeth=g.z_pinion, face_width=g.face_width, bore=d),
-            (0, 0, gear_z),
-            None,
-            {"module": "module", "teeth": "z_pinion"},
-        )
-    )
-    phase = gear_mesh_phase_deg(g.z_gear)
-    out.append(
-        _item(
-            "gear",
-            "SpurGear",
-            dict(module=g.module, teeth=g.z_gear, face_width=g.face_width, bore=d),
-            (cd, 0, gear_z),
-            {"axis": "Z", "angle": phase} if phase else None,
-            {"module": "module", "teeth": "z_gear"},
-        )
-    )
-    # Bearings: plate A seats open on z=0 (bearing z = 0 .. B); plate B seats
-    # open on z=h (bearing flipped, z = h - B .. h).
-    for side, x in (("in", 0.0), ("out", cd)):
-        out.append(
-            _item(
-                f"bearing_{side}_a",
-                "DeepGrooveBearing",
-                dict(model=g.bearing),
-                (x, 0, 0),
-                None,
-                {"model": "bearing"},
-            )
-        )
-        out.append(
-            _item(
-                f"bearing_{side}_b",
-                "DeepGrooveBearing",
-                dict(model=g.bearing),
-                (x, 0, h),
-                FLIP_X,
-                {"model": "bearing"},
-            )
-        )
-    tw, tn = g.washer_thickness, g.nut_thickness
-    for i, (x, y) in enumerate(g.hole_positions(), start=1):
+            _to("axis", "bearing_out_a", "axis", offset=0.0),
+        ),
+    ]
+    spacer = dict(screw=g.screw, length=g.bay, outer_diameter=g.spacer_od)
+    for i in range(1, 5):
         out.append(
             _item(
                 f"spacer_{i}",
                 "Spacer",
-                dict(screw=g.screw, length=g.bay, outer_diameter=g.spacer_od),
-                (x, y, t),
+                spacer,
+                _to("bottom", "plate_a", f"hole_{i}_in"),
             )
         )
+    out.append(
+        _item(
+            "plate_b",
+            "GearboxPlate",
+            plate_inputs,
+            _to(f"hole_{MIRROR[1]}_in", "spacer_1", "top"),
+            plate_bind,
+        )
+    )
+    for side in ("in", "out"):
         out.append(
+            _item(
+                f"bearing_{side}_b",
+                "DeepGrooveBearing",
+                bearing,
+                _to("top", "plate_b", f"seat_{side}"),
+                bbind,
+            )
+        )
+    gear_z = t + g.gear_gap
+    gear = dict(module=g.module, face_width=g.face_width, bore=d)
+    out.append(
+        _item(
+            "pinion",
+            "SpurGear",
+            dict(gear, teeth=g.z_pinion),
+            _to("axis", "shaft_in", "axis", offset=gear_z + e, angle=0.0),
+            {"module": "module", "teeth": "z_pinion"},
+        )
+    )
+    out.append(
+        _item(
+            "gear",
+            "SpurGear",
+            dict(gear, teeth=g.z_gear),
+            # mesh phase about the shaft: a joint value, not a rotation
+            _to(
+                "axis",
+                "shaft_out",
+                "axis",
+                offset=gear_z,
+                angle=math.radians(gear_mesh_phase_deg(g.z_gear)),
+            ),
+            {"module": "module", "teeth": "z_gear"},
+        )
+    )
+    for i in range(1, 5):
+        k = MIRROR[i]
+        out += [
+            _item(
+                f"washer_head_{i}",
+                "DIN125Washer",
+                dict(size=g.screw),
+                _to("bottom", "plate_b", f"hole_{k}"),
+            ),
             _item(
                 f"screw_{i}",
                 "DIN912Screw",
                 dict(size=g.screw, length=g.screw_length, with_thread=threads),
-                (x, y, h + tw - g.screw_length),
-            )
-        )
-        out.append(
-            _item(f"washer_head_{i}", "DIN125Washer", dict(size=g.screw), (x, y, h))
-        )
-        out.append(
-            _item(f"washer_nut_{i}", "DIN125Washer", dict(size=g.screw), (x, y, -tw))
-        )
-        out.append(
+                _to("head_seat", f"washer_head_{i}", "top"),
+            ),
+            _item(
+                f"washer_nut_{i}",
+                "DIN125Washer",
+                dict(size=g.screw),
+                _to("bottom", "plate_a", f"hole_{i}"),
+            ),
             _item(
                 f"nut_{i}",
                 "HexNut",
                 dict(size=g.screw, with_thread=threads),
-                (x, y, -tw - tn),
-            )
-        )
+                _to("bottom", f"washer_nut_{i}", "top"),
+            ),
+        ]
     return out
+
+
+def stage_loops(prefix: str = "") -> List[Dict[str, Any]]:
+    """The redundant contacts a stage closes (checked): plate B on the other
+    three spacers, both shafts in plate B's bearings, each nut on its bolt."""
+    p = prefix
+    loops = [
+        {"a": [f"{p}plate_b", f"hole_{MIRROR[i]}_in"], "b": [f"{p}spacer_{i}", "top"]}
+        for i in (2, 3, 4)
+    ]
+    loops += [
+        {"a": [f"{p}shaft_in", "axis"], "b": [f"{p}bearing_in_b", "axis"]},
+        {"a": [f"{p}shaft_out", "axis"], "b": [f"{p}bearing_out_b", "axis"]},
+    ]
+    loops += [
+        {"a": [f"{p}screw_{i}", "tip"], "b": [f"{p}nut_{i}", "bottom"]}
+        for i in range(1, 5)
+    ]
+    for loop in loops:
+        loop["dof"] = {}
+    return loops

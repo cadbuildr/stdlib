@@ -1,5 +1,6 @@
 from cadbuildr.foundation import *
 from cadbuildr.foundation.library import OneOf, part
+from cadbuildr.foundation.interfaces import NutSeat
 from cadbuildr.stdlib.common import add_axial_anchors
 from typing import ClassVar
 import math
@@ -113,6 +114,8 @@ class HexNut(Part):
             self.add_thread()
         # Anchors: bearing faces (bottom/top) + thread axis.
         add_axial_anchors(self, self.thickness)
+        # Interface: the bearing face lands on a hole face (exit side of a bolt).
+        self.add_interface(NutSeat(size=size), "bottom")
         self.paint("grey")
 
     def get_body_sketch(self):

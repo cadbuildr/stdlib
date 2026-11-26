@@ -3,6 +3,7 @@
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion
+from cadbuildr.foundation.interfaces import RodAxis, RodEnd
 from cadbuildr.foundation.library import Num, OneOf, part
 from cadbuildr.stdlib.common import STEEL, add_axial_anchors
 
@@ -41,4 +42,8 @@ class SmoothRod(Part):
         self.add_operation(Extrusion(Circle(Point(s, 0, 0), self.diameter / 2), length))
         # Anchors: end faces + axis (slide an LMxUU ``center`` along ``axis``).
         add_axial_anchors(self, length, ends=("end_a", "end_b"))
+        # Interfaces: both ends fix in a RodHole, bearings slide on the axis.
+        for end in ("end_a", "end_b"):
+            self.add_interface(RodEnd(d=self.diameter), end)
+        self.add_interface(RodAxis(d=self.diameter), "axis")
         self.paint(STEEL)

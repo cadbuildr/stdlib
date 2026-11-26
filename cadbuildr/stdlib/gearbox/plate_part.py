@@ -14,6 +14,8 @@ from cadbuildr.foundation import (
     Sketch,
     make_anchor,
 )
+from cadbuildr.foundation.interfaces import PlaneFace, ScrewHole
+from cadbuildr.foundation.interfaces import features as F
 from cadbuildr.foundation.library import Num, OneOf, part
 from cadbuildr.stdlib.bearings.ball_bearings.deep_groove_part import (
     DeepGrooveBearing,
@@ -96,20 +98,21 @@ class GearboxPlate(Part):
                     Extrusion(Circle(Point(Sketch(self.xy()), sx, sy), r), t)
                 )
 
-        # Bearing seats from the outer face, shaft clearance through the shoulder.
+        # Bearing seats from the outer face (BearingPocket: counterbore +
+        # BearingSeat on the shoulder, seat_in / seat_out), shaft clearance
+        # through the shoulder.
         B, D = g.bearing_width, float(g.bearing_spec["D"])
-        for x in (0.0, cd):
-            self.add_operation(
-                Extrusion(
-                    Circle(Point(Sketch(self.xy()), x, 0.0), D / 2.0), 0.0, B, cut=True
-                )
-            )
-            self.add_operation(
-                Extrusion(
-                    Circle(Point(Sketch(self.xy()), x, 0.0), g.shoulder_hole / 2.0),
-                    t,
-                    cut=True,
-                )
+        outer = self.add_anchor(make_anchor("outer", (0.0, 0.0, 0.0), z_down=True))
+        for x, seat in ((0.0, "seat_in"), (cd, "seat_out")):
+            F.BearingPocket(
+                face=outer,
+                at=(x, 0.0),
+                model=bearing,
+                name=seat,
+                depth=t,
+                through_d=g.shoulder_hole,
+                D=D,
+                B=B,
             )
         # Corner (spacer through-bolt) and mounting holes.
         clearance = CLEARANCE[screw] / 2.0
@@ -143,12 +146,16 @@ class GearboxPlate(Part):
         into = (0.0, 0.0, 1.0)
         self.add_anchor(make_anchor("bore_in", (0.0, 0.0, 0.0), z_axis=into))
         self.add_anchor(make_anchor("bore_out", (cd, 0.0, 0.0), z_axis=into))
-        self.add_anchor(make_anchor("seat_in", (0.0, 0.0, B), z_down=True))
-        self.add_anchor(make_anchor("seat_out", (cd, 0.0, B), z_down=True))
+        # Corner holes: ScrewHole on the outer face (a washer / head / nut
+        # lands there, group "corner") and a flat seat on the inner face (a
+        # spacer end, ``hole_<i>_in``); mounting holes (group "mount").
         for i, (x, y) in enumerate(holes, start=1):
-            self.add_anchor(make_anchor(f"hole_{i}", (x, y, 0.0), z_down=True))
+            hole = self.add_anchor(make_anchor(f"hole_{i}", (x, y, 0.0), z_down=True))
+            self.add_interface(ScrewHole(size=screw, depth=t), hole, group="corner")
+            inside = self.add_anchor(make_anchor(f"hole_{i}_in", (x, y, t)))
+            self.add_interface(PlaneFace(), inside, group="corner_in")
         for i, (x, y) in enumerate(mounts, start=1):
-            self.add_anchor(make_anchor(f"mount_{i}", (x, y, 0.0), z_down=True))
-        self.add_anchor(make_anchor("outer", (0.0, 0.0, 0.0), z_down=True))
+            hole = self.add_anchor(make_anchor(f"mount_{i}", (x, y, 0.0), z_down=True))
+            self.add_interface(ScrewHole(size=screw, depth=t), hole, group="mount")
         self.add_anchor(make_anchor("inner", (0.0, 0.0, t)))
         self.paint(ALUMINIUM)

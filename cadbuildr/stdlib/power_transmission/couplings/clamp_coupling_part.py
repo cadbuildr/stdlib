@@ -3,6 +3,7 @@
 import math
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
+from cadbuildr.foundation.interfaces import Bore
 from cadbuildr.foundation.library import Num, part
 from cadbuildr.stdlib.common import ALUMINIUM, add_axial_anchors
 
@@ -66,4 +67,7 @@ class ClampCoupling(Part):
         add_axial_anchors(self, length, ends=("end_a", "end_b"))
         self.add_anchor(make_anchor("bore_a_stop", (0.0, 0.0, half), z_down=True))
         self.add_anchor(make_anchor("bore_b_stop", (0.0, 0.0, half)))
+        # Interfaces: a ShaftEnd stops in either bore.
+        self.add_interface(Bore(d=bore_a), "bore_a_stop")
+        self.add_interface(Bore(d=bore_b), "bore_b_stop")
         self.paint(ALUMINIUM)

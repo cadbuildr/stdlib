@@ -4,6 +4,7 @@ import math
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
+from cadbuildr.foundation.interfaces import NemaBody, ScrewHole, Shaft, ShaftEnd
 from cadbuildr.foundation.library import Num, OneOf, part
 from cadbuildr.stdlib.common import BLACK_OXIDE
 
@@ -132,5 +133,16 @@ class StepperMotor(Part):
                     make_anchor(f"mount_hole_{i}", (sx * r, sy * r, body_length))
                 )
                 i += 1
+        # Interfaces: the front face on a NemaFace, the shaft (pulleys,
+        # gears) and its tip (couplings), the four tapped holes (group "mount").
+        self.add_interface(NemaBody(frame=frame), "mount_face")
+        self.add_interface(Shaft(d=d["shaft_d"]), "shaft")
+        self.add_interface(ShaftEnd(d=d["shaft_d"]), "shaft_tip")
+        for i in range(4):
+            self.add_interface(
+                ScrewHole(size=f"M{d['hole_d']:g}", depth=5, thread=True),
+                f"mount_hole_{i}",
+                group="mount",
+            )
         self.paint(BLACK_OXIDE)
         self.frame_size = frame
