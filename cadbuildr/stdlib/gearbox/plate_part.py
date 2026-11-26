@@ -122,6 +122,19 @@ class GearboxPlate(Part):
                 )
             )
 
+        # Lightening holes between the bearing seats, above and below the mesh line.
+        for sy in (-1.0, 1.0):
+            self.add_operation(
+                Extrusion(
+                    Circle(
+                        Point(Sketch(self.xy()), cd / 2.0, sy * g.y_half * 0.54),
+                        min(9.0, g.y_half * 0.18),
+                    ),
+                    t,
+                    cut=True,
+                )
+            )
+
         self.module, self.z_pinion, self.z_gear = g.module, g.z_pinion, g.z_gear
         self.bearing, self.screw, self.thickness = bearing, screw, t
         self.center_distance = cd
