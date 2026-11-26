@@ -280,6 +280,7 @@ class Carriage(Part):
         length: block length along the rods (fits two bearings per rod).
         belt_clamp: add the GT2 belt clamp on top.
         lead_screw: bore for a T8 lead screw + nut mount on the -X face.
+        camera_mount: a camera plate on top (1/4"-20 hole), unless belt_clamp.
     """
 
     RODS: ClassVar[dict] = RODS
@@ -291,6 +292,7 @@ class Carriage(Part):
         length: Num(min=62, max=150, step=1) = 70,
         belt_clamp: bool = False,
         lead_screw: bool = False,
+        camera_mount: bool = True,
     ):
         _carriage_body(self, rod, spacing, length, CARRIAGE_ABOVE, lead_screw)
         self.belt_clamp, self.lead_screw = bool(belt_clamp), bool(lead_screw)
@@ -311,6 +313,14 @@ class Carriage(Part):
                 _hole_z(self, x, BELT_Y + 5, M3_CLEAR, CARRIAGE_ABOVE, top)
             # belt centre line in the slot, +X along the belt
             _anchor(self, "belt_clamp", (0, BELT_Y, BELT_Z), PX)
+        elif camera_mount:
+            # Camera plate: 50 x 50 x 6 on top, 1/4"-20 clearance + two M3 pins.
+            top = CARRIAGE_ABOVE + 6
+            _box(self, -25, 25, -25, 25, CARRIAGE_ABOVE, top)
+            _hole_z(self, 0, 0, 3.35, CARRIAGE_ABOVE, top)
+            for y in (-16.0, 16.0):
+                _hole_z(self, 0, y, M3_CLEAR, CARRIAGE_ABOVE, top)
+            _anchor(self, "camera", (0, 0, top), PZ)
         self.paint(CARRIAGE_COLOR)
 
 
