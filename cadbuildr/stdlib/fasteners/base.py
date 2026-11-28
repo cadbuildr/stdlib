@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any, Optional, Protocol
 
 from cadbuildr.foundation import Part, make_anchor
+from cadbuildr.foundation.interfaces import ScrewHead, ScrewTip
 
 
 class ScrewLike(Protocol):
@@ -44,16 +45,24 @@ class Fastener(Part):
         body_radius: float,
         body_height: float,
         seat_z: Optional[float] = None,
+        size: Optional[str] = None,
     ) -> None:
         """Record the shank size and add the ``head_seat`` + ``tip`` anchors.
 
         ``seat_z`` defaults to ``body_height`` (shank ends at the seat).
+        ``size`` is the designation the ``ScrewHead`` / ``ScrewTip``
+        interfaces carry (default ``M<diameter>``; wood screws pass ``#8``).
         """
         self.body_radius = float(body_radius)
         self.body_height = float(body_height)
         seat = self.body_height if seat_z is None else float(seat_z)
-        self.add_anchor(make_anchor("head_seat", (0.0, 0.0, seat), z_down=True))
-        self.add_anchor(make_anchor("tip", (0.0, 0.0, 0.0), z_down=True))
+        head = self.add_anchor(make_anchor("head_seat", (0.0, 0.0, seat), z_down=True))
+        tip = self.add_anchor(make_anchor("tip", (0.0, 0.0, 0.0), z_down=True))
+        # Interfaces: the head lands on a ScrewHole, a nut runs on from the tip.
+        size = size or f"M{2.0 * self.body_radius:g}"
+        self.fastener_size = size
+        self.add_interface(ScrewHead(size=size, length=self.body_height), head)
+        self.add_interface(ScrewTip(size=size), tip)
 
 
 def _missing_contract(screw: Any) -> list[str]:

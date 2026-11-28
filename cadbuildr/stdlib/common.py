@@ -22,7 +22,6 @@ from cadbuildr.foundation import (
     make_anchor,
 )
 
-
 # Material colours (hex) for consistent rendering across the catalogue.
 STEEL = "#9ea4ab"
 STAINLESS = "#b7bcc2"
@@ -124,8 +123,34 @@ def lathe_revolve(part, points):
         s.pencil.line_to(*p)
     shape = s.pencil.close()
     top = max(z for _, z in points)
+    if abs(top) < 1e-9:  # profile entirely below z=0: point the axis down
+        top = min(z for _, z in points)
     axis = Axis(Line(s.origin, Point(s, 0, top)))
     part.add_operation(Lathe(shape, axis))
+
+
+def countersunk_head_profile(core_r, length, d, dk_theo, dk_actual):
+    """(r, z) lathe points of a 90° countersunk screw, tip at z=0, flush head
+    top at z=``length`` (ISO 10642 / ISO 2009 / ISO 7046 geometry).
+
+    The cone runs at 45° from the shank (nominal ``d``) to the head; it
+    would reach the theoretical diameter ``dk_theo`` at the top face (that is
+    what the countersink is cut to, so the head sits flush). The real head
+    edge is truncated: the cone stops at ``dk_actual`` and a short cylinder
+    of that diameter rises to the top. Head height k = (dk_theo - d) / 2.
+    """
+    k = (dk_theo - d) / 2
+    z_cone = length - k
+    z_edge = z_cone + (dk_actual - d) / 2
+    return [
+        (0.0, 0.0),
+        (core_r, 0.0),
+        (core_r, z_cone),
+        (d / 2, z_cone),
+        (dk_actual / 2, z_edge),
+        (dk_actual / 2, length),
+        (0.0, length),
+    ]
 
 
 def iso_thread_profile(sketch: Sketch, pitch: float, *, external: bool = True):
@@ -162,6 +187,96 @@ def add_external_thread(part, *, radius: float, length: float, pitch: float):
             dir=Point3D(0, 0, 1),
         )
     )
+
+
+def trapezoidal_thread_geometry(major_d: float, pitch: float) -> dict:
+    """DIN 103 (ISO 2904) metric trapezoidal 30° thread dimensions.
+
+    Returns ``d3`` (screw minor), ``d2`` (pitch), ``D1`` (nut minor), ``D4``
+    (nut major), ``h3`` (screw thread depth), ``H4`` (nut depth), ``ac``
+    (crest clearance). Tr8x2: d3 5.5, d2 7.0, D1 6.0, D4 8.5.
+    """
+    if pitch <= 1.5:
+        ac = 0.15
+    elif pitch <= 5:
+        ac = 0.25
+    elif pitch <= 12:
+        ac = 0.5
+    else:
+        ac = 1.0
+    h3 = 0.5 * pitch + ac
+    return {
+        "d3": major_d - 2 * h3,
+        "d2": major_d - 0.5 * pitch,
+        "D1": major_d - pitch,
+        "D4": major_d + 2 * ac,
+        "h3": h3,
+        "H4": h3,
+        "ac": ac,
+    }
+
+
+def add_trapezoidal_thread(
+    part,
+    *,
+    major_d: float,
+    pitch: float,
+    starts: int,
+    length: float,
+    internal: bool = False,
+):
+    """Add a DIN 103 trapezoidal 30° thread of ``starts`` starts (lead =
+    ``starts`` x ``pitch``) over ``length`` along +Z from z=0.
+
+    External: teeth stand on the screw core of diameter ``d3`` (the caller
+    builds that core). Internal: teeth hang inward from a bore of diameter
+    ``D4`` (the caller cuts that bore) and sit half a pitch from the screw's
+    teeth, so screw and nut built with the same arguments interleave.
+    """
+    from cadbuildr.foundation import Point3D, Sketch, Thread
+
+    g = trapezoidal_thread_geometry(major_d, pitch)
+    tan15 = math.tan(math.radians(15.0))
+    r2 = g["d2"] / 2
+    lead = pitch * starts
+    if internal:
+        r_root, r_crest = g["D4"] / 2, g["D1"] / 2
+        z_phase = pitch / 2
+    else:
+        r_root, r_crest = g["d3"] / 2, major_d / 2
+        z_phase = 0.0
+    depth = abs(r_root - r_crest)
+    # Tooth half-thickness at a radius: P/4 at the pitch line, flanks at 15°.
+    sign = 1.0 if internal else -1.0
+
+    def half(r):
+        return pitch / 4 + sign * (r - r2) * tan15
+
+    hr, hc = half(r_root), half(r_crest)
+    out = -1.0 if internal else 1.0
+    sink = 0.05  # overlap into the core / wall so the union is clean
+    for k in range(int(starts)):
+        s = Sketch(part.xz())
+        s.pencil.move_to(-out * sink, -hr)
+        s.pencil.line_to(out * depth, -hc)
+        s.pencil.line_to(out * depth, hc)
+        s.pencil.line_to(-out * sink, hr)
+        profile = s.pencil.close()
+        z0 = pitch / 2 + z_phase + k * pitch
+        height = length - z0 - pitch / 2
+        if height <= 0:
+            continue
+        part.add_operation(
+            Thread(
+                profile=profile,
+                pitch=lead,
+                height=height,
+                radius=r_root,
+                center=Point3D(0, 0, z0),
+                dir=Point3D(0, 0, 1),
+            )
+        )
+    return g
 
 
 def add_internal_thread(part, *, nominal_radius: float, length: float, pitch: float):
@@ -212,3 +327,23 @@ def add_axial_anchors(part, length, *, ends=("bottom", "top"), axis="axis"):
     part.add_anchor(make_anchor(top, (0.0, 0.0, float(length))))
     if axis:
         part.add_anchor(make_anchor(axis, (0.0, 0.0, 0.0)))
+
+
+def require_option(table, value, *, what: str, owner: str):
+    """Return ``table[value]`` or raise a ``ValueError`` naming the choices.
+
+    Every catalog part looks its dimensions up in a standard's table; an
+    unknown key must fail loudly with the valid options, not a bare KeyError.
+    """
+    if value not in table:
+        choices = ", ".join(str(k) for k in table)
+        raise ValueError(f"{owner}: unknown {what} {value!r} (choose from {choices}).")
+    return table[value]
+
+
+def require_range(value, *, lo: float, hi: float, what: str, owner: str) -> float:
+    """Return ``float(value)`` or raise a ``ValueError`` when outside [lo, hi]."""
+    v = float(value)
+    if not lo <= v <= hi:
+        raise ValueError(f"{owner}: {what} {v:g} out of range [{lo:g}, {hi:g}].")
+    return v

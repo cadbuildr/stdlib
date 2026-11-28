@@ -3,26 +3,21 @@
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from typing import Optional
+
+from cadbuildr.foundation.interfaces import BearingFace
+from cadbuildr.foundation.library import OneOf, part
 from cadbuildr.stdlib.common import BLACK_OXIDE, add_axial_anchors
 
 
-@catalog_part(
-    id="lm-uu-linear-bearing",
-    category="Linear Motion",
-    subcategory="Linear Bearings",
+@part(
+    category="Linear Motion/Linear Bearings",
     name="Linear Ball Bearing (LMxUU)",
     standard="LMxUU metric series",
     description="Closed-type linear ball bushing for round rod (LMxUU series sizing).",
-    params=[
-        ParamSpec.enum(
-            "model",
-            choices=["LM6UU", "LM8UU", "LM10UU", "LM12UU", "LM16UU"],
-            default="LM8UU",
-        ),
-    ],
+    catalog_id="lm-uu-linear-bearing",
     featured=True,
-    example_config={"model": "LM8UU"},
+    example={"model": "LM8UU"},
 )
 class LinearBearing(Part):
     # bore (d), outer diameter (D), length (L)
@@ -34,7 +29,28 @@ class LinearBearing(Part):
         "LM16UU": {"d": 16.0, "D": 28.0, "L": 37.0},
     }
 
-    def __init__(self, model="LM8UU"):
+    # rod diameter -> the bearing riding it
+    BY_ROD: ClassVar[dict[str, str]] = {
+        "6": "LM6UU",
+        "8": "LM8UU",
+        "10": "LM10UU",
+        "12": "LM12UU",
+        "16": "LM16UU",
+    }
+
+    def __init__(
+        self, model: OneOf[TABLE] = "LM8UU", rod: Optional[OneOf[BY_ROD]] = None
+    ):
+        """Args:
+        model: bearing designation (bore, outer diameter, length from ``TABLE``).
+        rod: rod diameter; when given it picks the model (``"8"`` -> LM8UU), so
+            one ``rod`` input can drive rods, plates and their bearings.
+        """
+        if rod is not None:
+            key = f"{float(rod):g}" if not isinstance(rod, str) else rod
+            if key not in self.BY_ROD:
+                raise ValueError(f"No LMxUU bearing for a {rod} mm rod.")
+            model = self.BY_ROD[key]
         if model not in self.TABLE:
             raise ValueError(f"Unknown linear bearing '{model}'.")
         b = self.TABLE[model]
@@ -49,5 +65,9 @@ class LinearBearing(Part):
         self.bore_radius, self.outer_radius, self.length = bore_r, outer_r, length
         add_axial_anchors(self, length, ends=("end_a", "end_b"))
         self.add_anchor(make_anchor("center", (0.0, 0.0, length / 2)))
+        # Interfaces: an end face in a carriage BearingPocket, or sliding on a
+        # rod's RodAxis.
+        for end in ("end_a", "end_b"):
+            self.add_interface(BearingFace(model=model, d=b["d"]), end)
         self.paint(BLACK_OXIDE)
         self.model = model

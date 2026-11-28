@@ -28,6 +28,10 @@ const CATEGORY_ORDER = [
   "Power Transmission",
   "Actuators",
   "Profiles",
+  "Springs",
+  "Hardware",
+  "Motion Kits",
+  "Gearbox",
 ];
 
 // ---- render gate ----
@@ -121,6 +125,9 @@ function PartCard({
   entry: CatalogEntry;
   onOpen: (e: CatalogEntry) => void;
 }): React.ReactElement {
+  // New parts ship before their pre-rendered PNG (capture.html needs a local
+  // kernel-api): show a placeholder instead of a broken image.
+  const [thumbMissing, setThumbMissing] = React.useState(false);
   return (
     <motion.button
       className={`card${entry.featured ? " featured" : ""}`}
@@ -132,7 +139,20 @@ function PartCard({
       transition={{ duration: 0.3 }}
     >
       <div className="card-canvas">
-        <img className="thumb" src={thumbUrl(entry.id)} alt={entry.name} loading="lazy" />
+        {thumbMissing ? (
+          <div className="thumb thumb-missing">
+            <Boxes size={36} />
+            <span>open to render</span>
+          </div>
+        ) : (
+          <img
+            className="thumb"
+            src={thumbUrl(entry.id)}
+            alt={entry.name}
+            loading="lazy"
+            onError={() => setThumbMissing(true)}
+          />
+        )}
       </div>
       <div className="card-body">
         <h3>{entry.name}</h3>

@@ -4,35 +4,33 @@ import math
 from typing import ClassVar
 
 from cadbuildr.foundation import Sketch, Axis, Line, Point, Lathe, Extrusion
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.library import Num, OneOf, part
 from cadbuildr.stdlib.common import (
     ISO_COARSE_PITCH,
     nominal_diameter,
     hexagon_shape,
     add_external_thread,
+    require_option,
 )
 from cadbuildr.stdlib.fasteners.base import Fastener
 
 
-@catalog_part(
-    id="hex-bolt",
-    category="Fasteners",
-    subcategory="Screws & Bolts",
+@part(
+    category="Fasteners/Screws & Bolts",
     name="Hex Head Bolt",
     standard="DIN 933 / 931 · ISO 4017 / 4014",
     description="Hexagonal-head bolt. Fully threaded by default; set a grip length for a DIN 931 partial thread.",
-    params=[
-        ParamSpec.enum(
-            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M8"
-        ),
-        ParamSpec.number("length", min=8, max=80, default=30, step=1),
-        ParamSpec.number(
-            "grip_length", min=0, max=40, default=0, step=1, label="Unthreaded grip"
-        ),
-        ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
-    ],
+    inputs={
+        "grip_length": {"label": "Unthreaded grip"},
+        "with_thread": {"label": "Modeled thread"},
+    },
+    configurations={
+        "M8 x 35 (DIN 931, 12 mm grip)": dict(size="M8", length=35, grip_length=12),
+        "M6 x 20 (DIN 933)": dict(size="M6", length=20, grip_length=0),
+    },
+    catalog_id="hex-bolt",
     featured=True,
-    example_config={"size": "M8", "length": 35, "grip_length": 12},
+    example={"size": "M8", "length": 35, "grip_length": 12},
 )
 class HexBolt(Fastener):
     # width across flats (mm) and head height k (mm), ISO 4017/4014.
@@ -46,9 +44,20 @@ class HexBolt(Fastener):
         "M12": {"waf": 18.0, "k": 7.5},
     }
 
-    def __init__(self, size, length, grip_length=0, with_thread=True):
-        if size not in self.HEAD_TABLE:
-            raise ValueError(f"Size '{size}' not supported by HexBolt.")
+    def __init__(
+        self,
+        size: OneOf[HEAD_TABLE] = "M8",
+        length: Num(min=8, max=80, step=1) = 30,
+        grip_length: Num(min=0, max=40, step=1) = 0,
+        with_thread: bool = True,
+    ):
+        """Args:
+        size: metric thread size (hex head from ``HEAD_TABLE``).
+        length: nominal length under the head.
+        grip_length: unthreaded shank under the head (0 = fully threaded, DIN 933).
+        with_thread: model the helical thread (slower to render).
+        """
+        require_option(self.HEAD_TABLE, size, what="size", owner="HexBolt")
         self.size = size
         self.length = length
         self.with_thread = with_thread

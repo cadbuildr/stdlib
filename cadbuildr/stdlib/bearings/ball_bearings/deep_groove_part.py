@@ -3,26 +3,19 @@
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.interfaces import BearingFace, Bore
+from cadbuildr.foundation.library import OneOf, part
 from cadbuildr.stdlib.common import STEEL, BLACK_OXIDE, add_axial_anchors
 
 
-@catalog_part(
-    id="deep-groove-ball-bearing",
-    category="Bearings",
-    subcategory="Ball Bearings",
+@part(
+    category="Bearings/Ball Bearings",
     name="Deep Groove Ball Bearing",
     standard="ISO 15 · 6xx / 68xx series",
     description="Shielded deep-groove ball bearing modeled as inner + outer races with a recessed shield face.",
-    params=[
-        ParamSpec.enum(
-            "model",
-            choices=["623", "624", "625", "626", "688", "608", "6800", "6801"],
-            default="608",
-        ),
-    ],
+    catalog_id="deep-groove-ball-bearing",
     featured=True,
-    example_config={"model": "608"},
+    example={"model": "608"},
 )
 class DeepGrooveBearing(Part):
     # bore (d), outer diameter (D), width (B)
@@ -37,7 +30,10 @@ class DeepGrooveBearing(Part):
         "6801": {"d": 12.0, "D": 21.0, "B": 5.0},
     }
 
-    def __init__(self, model="608"):
+    def __init__(self, model: OneOf[TABLE] = "608"):
+        """Args:
+        model: bearing designation (bore x outer diameter x width from ``TABLE``).
+        """
         if model not in self.TABLE:
             raise ValueError(f"Unknown bearing '{model}'.")
         b = self.TABLE[model]
@@ -79,6 +75,10 @@ class DeepGrooveBearing(Part):
         # for a RevoluteJoint / CylindricalJoint onto a shaft).
         self.bore_radius, self.outer_radius, self.width = bore_r, outer_r, width
         add_axial_anchors(self, width)
+        # Interfaces: either ring face on a BearingSeat, the bore on a Shaft.
+        for face in ("bottom", "top"):
+            self.add_interface(BearingFace(model=model, d=b["d"]), face)
+        self.add_interface(Bore(d=b["d"]), "axis")
         self.paint(STEEL)
         self.shield_color = BLACK_OXIDE
         self.model = model

@@ -3,26 +3,24 @@
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Circle, Extrusion, make_anchor
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.interfaces import NutSeat, TSlotNutSeat
+from cadbuildr.foundation.library import OneOf, part
 from cadbuildr.stdlib.common import (
     rectangle_shape,
     add_internal_thread,
     add_axial_anchors,
+    require_option,
 )
 
 
-@catalog_part(
-    id="t-slot-nut-6mm",
-    category="Fasteners",
-    subcategory="Nuts",
+@part(
+    category="Fasteners/Nuts",
     name="T-Slot Nut (6 mm)",
     standard="6 mm slot · 2020 / 2040 series",
     description="Slide-in T-nut for the 6 mm slot of 2020/2040 aluminium extrusion: wide flange under the lips, narrow neck through the opening.",
-    params=[
-        ParamSpec.enum("size", choices=["M3", "M4", "M5", "M6"], default="M5"),
-    ],
-    featured=False,
-    example_config={"size": "M5"},
+    inputs={"with_thread": {"label": "Modeled thread"}},
+    catalog_id="t-slot-nut-6mm",
+    example={"size": "M5"},
 )
 class TSlotNut(Part):
     # Geometry of the 6 mm slot interface (mm), shared by all thread sizes.
@@ -33,9 +31,12 @@ class TSlotNut(Part):
     NECK_H: ClassVar[float] = 1.6
     PITCH: ClassVar[dict[str, float]] = {"M3": 0.5, "M4": 0.7, "M5": 0.8, "M6": 1.0}
 
-    def __init__(self, size, with_thread=True):
-        if size not in self.PITCH:
-            raise ValueError(f"Size '{size}' not supported.")
+    def __init__(self, size: OneOf[PITCH] = "M5", with_thread: bool = True):
+        """Args:
+        size: thread of the nut (M3 – M6; the slot geometry is shared).
+        with_thread: model the helical thread (slower to render).
+        """
+        require_option(self.PITCH, size, what="size", owner="TSlotNut")
         nominal = float(size[1:])
         total_h = self.FLANGE_H + self.NECK_H
 
@@ -56,5 +57,16 @@ class TSlotNut(Part):
         self.thickness = total_h
         add_axial_anchors(self, total_h)
         self.add_anchor(make_anchor("flange_seat", (0.0, 0.0, self.FLANGE_H)))
+        # Interfaces: the neck top (flush with the profile face) takes the
+        # screw's clamped face (NutSeat on ``top``) and sits in a 6 mm slot
+        # (``slot_seat``, same place, +X along the slot).
+        self.add_interface(NutSeat(size=size), "top")
+        seat = make_anchor(
+            "slot_seat",
+            (0.0, 0.0, total_h),
+            z_axis=(0.0, 0.0, 1.0),
+            x_axis=(0.0, 1.0, 0.0),
+        )
+        self.add_interface(TSlotNutSeat(slot=6), seat)
         self.paint("grey")
         self.size = size

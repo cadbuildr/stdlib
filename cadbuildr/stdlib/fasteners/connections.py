@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from cadbuildr.foundation import (
+    BoolParameter,
     Circle,
     Connection,
     Extrusion,
@@ -61,6 +62,8 @@ def connect_with_screw(
     clearance: float = 0.2,
     drill: bool = True,
     depth: Optional[float] = None,
+    into: Optional[Any] = None,
+    into_depth: Optional[float] = None,
 ) -> Any:
     """Fasten ``screw`` into a part at ``hole_anchor`` (+Z out of the face).
 
@@ -69,6 +72,11 @@ def connect_with_screw(
     (radius = shank + ``clearance``, ``depth`` defaults to the shank length
     plus clearance). ``screw`` must honour the
     :class:`~cadbuildr.stdlib.fasteners.base.Fastener` contract.
+
+    ``into`` is an anchor on the part the screw threads into (its face
+    under the clamped part, +Z out of it): a tap-drill hole (0.8 x the
+    shank diameter) is cut there, ``into_depth`` deep (required) — e.g. a
+    rail screwed down onto a base plate.
     """
     require_fastener(screw)
     modifiers = []
@@ -76,6 +84,15 @@ def connect_with_screw(
         drill_depth = depth if depth is not None else screw.body_height + clearance
         modifiers.append(
             _clearance_drill(hole_anchor, screw.body_radius + clearance, drill_depth)
+        )
+    if into is not None:
+        if into_depth is None or float(into_depth) <= 0:
+            raise ValueError(
+                "connect_with_screw: into= needs a positive into_depth= "
+                "(how far the shank enters that part)."
+            )
+        modifiers.append(
+            _clearance_drill(into, 0.8 * screw.body_radius, float(into_depth))
         )
     _mate(assembly, hole_anchor, screw.anchor("head_seat"), modifiers)
     return screw
@@ -146,3 +163,46 @@ def connect_with_bolt_and_nut(
         nut_face = nut_washer.anchor("top")
     _mate(assembly, nut_face, nut.anchor("bottom"))
     return bolt
+
+
+def connect_heat_set_insert(
+    assembly: Any,
+    insert: Any,
+    face_anchor: Any,
+    *,
+    pocket: bool = True,
+) -> Any:
+    """Melt ``insert`` (a :class:`~cadbuildr.stdlib.fasteners.inserts.HeatSetInsert`)
+    into the part at ``face_anchor`` (+Z out of the face).
+
+    The insert's ``top`` sits flush with the face (same +Z: it is not a
+    face-to-face contact), and with ``pocket`` the pocket
+    (``insert.pocket_diameter`` x ``insert.pocket_depth``) is cut into the
+    anchor's part. Then fasten into it with ``connect_with_screw(...,
+    insert.anchor("top"), drill=False)`` or through a clamped part.
+    """
+    for attr in ("pocket_diameter", "pocket_depth"):
+        if not hasattr(insert, attr):
+            raise TypeError(
+                f"{type(insert).__name__} is not a threaded insert (missing {attr})."
+            )
+    modifiers = (
+        [
+            _clearance_drill(
+                face_anchor, insert.pocket_diameter / 2.0, insert.pocket_depth
+            )
+        ]
+        if pocket
+        else []
+    )
+    assembly.add_connection(
+        Connection(
+            joint=RigidJoint(
+                parent_anchor=face_anchor,
+                child_anchor=insert.anchor("top"),
+                flip=BoolParameter(value=False),
+            ),
+            modifiers=modifiers,
+        )
+    )
+    return insert

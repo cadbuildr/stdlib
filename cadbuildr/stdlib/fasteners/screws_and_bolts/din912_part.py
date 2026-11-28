@@ -9,7 +9,7 @@ from cadbuildr.foundation import (
     Thread,
 )
 from cadbuildr.stdlib.fasteners.base import Fastener
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.library import Num, OneOf, part
 from typing import ClassVar
 import math
 
@@ -122,38 +122,19 @@ class Screw(Fastener):
 
 
 # Define the DIN912Screw class
-@catalog_part(
-    id="din912-socket-cap-screw",
-    category="Fasteners",
-    subcategory="Screws & Bolts",
+@part(
+    category="Fasteners/Screws & Bolts",
     name="Socket Head Cap Screw",
     standard="DIN 912 / ISO 4762",
     description="Hex-socket (Allen) cap-head screw with a modeled ISO metric thread.",
-    params=[
-        ParamSpec.enum(
-            "size",
-            choices=[
-                "M2",
-                "M2.5",
-                "M3",
-                "M4",
-                "M5",
-                "M6",
-                "M8",
-                "M10",
-                "M12",
-                "M14",
-                "M16",
-                "M20",
-                "M24",
-            ],
-            default="M6",
-        ),
-        ParamSpec.number("length", min=3, max=80, default=20, step=1),
-        ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
-    ],
+    configurations={
+        "Default": dict(size="M6", length=20),
+        "Short M3": dict(size="M3", length=8),
+    },
+    inputs={"with_thread": {"label": "Modeled thread"}},
+    catalog_id="din912-socket-cap-screw",
     featured=True,
-    example_config={"size": "M8", "length": 30},
+    example={"size": "M8", "length": 30},
 )
 class DIN912Screw(Screw):
     # Class constant: dimension table
@@ -253,7 +234,17 @@ class DIN912Screw(Screw):
         },
     }
 
-    def __init__(self, size, length, with_thread=True):
+    def __init__(
+        self,
+        size: OneOf[dimension_table] = "M6",
+        length: Num(min=3, max=80, step=1) = 20,
+        with_thread: bool = True,
+    ):
+        """Args:
+        size: metric thread size (head and socket dimensions from ``dimension_table``).
+        length: nominal length under the head.
+        with_thread: model the helical thread (slower to render).
+        """
         if size not in self.dimension_table:
             raise ValueError(f"Size '{size}' not found in dimension table.")
 

@@ -8,29 +8,45 @@ from cadbuildr.foundation import (
     Thread,
     Point3D,
 )
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.interfaces import ScrewTip
+from cadbuildr.foundation.library import Num, part
 from cadbuildr.stdlib.common import add_axial_anchors
 import math
 
 
-@catalog_part(
-    id="threaded-rod-generic",
-    category="Fasteners",
-    subcategory="Threaded Rods",
+@part(
+    category="Fasteners/Threaded Rods",
     name="Threaded Rod (generic)",
     standard="DIN 975 / ISO 4042",
     description="Fully-threaded metric rod; set the diameter, length and pitch directly.",
-    params=[
-        ParamSpec.number("diameter", min=3, max=24, default=8, step=1),
-        ParamSpec.number("length", min=20, max=300, default=80, step=5),
-        ParamSpec.number("thread_pitch", min=0.5, max=3, default=1.25, step=0.05),
-        ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
-    ],
-    featured=False,
-    example_config={"diameter": 8, "length": 80, "thread_pitch": 1.25},
+    inputs={"with_thread": {"label": "Modeled thread"}},
+    configurations={
+        "M8 x 80 (1.25 pitch)": dict(diameter=8, length=80, thread_pitch=1.25),
+        "M10 x 100 (1.5 pitch)": dict(diameter=10, length=100, thread_pitch=1.5),
+        "M8 fine x 80 (1.0 pitch)": dict(diameter=8, length=80, thread_pitch=1.0),
+    },
+    catalog_id="threaded-rod-generic",
+    example={"diameter": 8, "length": 80, "thread_pitch": 1.25},
 )
 class ThreadedRod(Part):
-    def __init__(self, diameter, length, thread_pitch=1.25, with_thread=True):
+    def __init__(
+        self,
+        diameter: Num(min=3, max=24, step=1) = 8,
+        length: Num(min=20, max=300, step=5) = 80,
+        thread_pitch: Num(min=0.5, max=3, step=0.05) = 1.25,
+        with_thread: bool = True,
+    ):
+        """Args:
+        diameter: major (nominal) diameter.
+        length: rod length (along +Z from z=0).
+        thread_pitch: thread pitch (ISO coarse M8 = 1.25).
+        with_thread: model the helical thread (slower to render).
+        """
+        if float(diameter) <= 0 or float(length) <= 0 or float(thread_pitch) <= 0:
+            raise ValueError(
+                f"ThreadedRod: diameter, length and thread_pitch must be > 0 "
+                f"(got {diameter}, {length}, {thread_pitch})."
+            )
         self.diameter = diameter
         self.length = length
         self.thread_pitch = thread_pitch
@@ -43,6 +59,10 @@ class ThreadedRod(Part):
         # Anchors: end faces + axis (nuts mate on the ends or slide on axis).
         self.radius = diameter / 2
         add_axial_anchors(self, length, ends=("end_a", "end_b"))
+        # Interfaces: a nut runs on from either end (NutSeat <-> ScrewTip).
+        size = f"M{float(diameter):g}"
+        for end in ("end_a", "end_b"):
+            self.add_interface(ScrewTip(size=size), end)
 
     def create_body(self):
         s = Sketch(self.xz())

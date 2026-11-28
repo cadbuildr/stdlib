@@ -45,6 +45,7 @@ def _plate(
         Extrusion(rectangle_shape(Sketch(plate.xy()), width, depth), thickness)
     )
     plate.add_anchor(make_anchor("hole", (0.0, 0.0, thickness)))
+    plate.add_anchor(make_anchor("bottom", (0.0, 0.0, 0.0), z_down=True))
     plate.thickness = thickness
     plate.paint(color)
     return plate
