@@ -18,7 +18,7 @@ after adding/changing parts, run a kernel-api locally and use the capture page,
 which renders every part in one real R3F scene and writes the PNGs:
 
 ```bash
-# 1. run a local kernel-api (no auth) — e.g. from tsjs/apps/kernel-api
+# 1. run a local kernel-api (no auth)
 # 2. dump the static manifest:
 python -c "import json; from cadbuildr.stdlib.catalog import get_catalog_manifest; \
   open('public/catalog.json','w').write(json.dumps(get_catalog_manifest()))"

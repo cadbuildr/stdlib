@@ -3,7 +3,8 @@
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Point, Circle, Extrusion, make_anchor
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.interfaces import TSlot
+from cadbuildr.foundation.library import Num, OneOf, part
 from cadbuildr.stdlib.common import (
     ALUMINIUM,
     add_axial_anchors,
@@ -16,19 +17,14 @@ _DEPTH = 6.0  # how far the slot channel reaches in
 _BORE_R = 2.55  # central bore radius (~M5 tap / 5 mm)
 
 
-@catalog_part(
-    id="alu-extrusion-tslot",
-    category="Profiles",
-    subcategory="Extrusions",
+@part(
+    category="Profiles/Extrusions",
     name="Aluminium Extrusion (T-slot)",
     standard="2020 / 2040 · 6 mm slot",
     description="Open-builds style aluminium T-slot extrusion with face slots and centre bore(s). Pick the series and cut length.",
-    params=[
-        ParamSpec.enum("series", choices=["2020", "2040"], default="2020"),
-        ParamSpec.number("length", min=20, max=600, default=100, step=10),
-    ],
+    catalog_id="alu-extrusion-tslot",
     featured=True,
-    example_config={"series": "2020", "length": 120},
+    example={"series": "2020", "length": 120},
 )
 class AluExtrusion(Part):
     # series -> (width, height, cell centres on Y)
@@ -37,10 +33,25 @@ class AluExtrusion(Part):
         "2040": {"w": 20.0, "h": 40.0, "cells": [-10.0, 10.0]},
     }
 
-    def __init__(self, series="2020", length=100):
+    def __init__(
+        self,
+        series: OneOf[GEOMETRY] = "2020",
+        length: Num(min=20, max=1000, step=10) = 100,
+        trim: Num(min=0, max=200, step=1) = 0,
+    ):
+        """Args:
+        series: profile series (``2020`` or ``2040``, 6 mm slot).
+        length: nominal length along the profile (+Z).
+        trim: cut this much off ``length`` (the profile is ``length - trim``),
+            so ``length`` can follow the same input as rods or other rails.
+        """
+        length = float(length) - float(trim)
+        if length <= 0:
+            raise ValueError("trim leaves no profile")
         if series not in self.GEOMETRY:
             raise ValueError(f"Unknown series '{series}'.")
         g = self.GEOMETRY[series]
+        self.series_name = series
         w, h, cells = g["w"], g["h"], g["cells"]
 
         # Solid bar.
@@ -81,6 +92,8 @@ class AluExtrusion(Part):
         self.add_anchor(
             make_anchor(name, position, z_axis=normal, x_axis=(0.0, 0.0, 1.0))
         )
+        # Interface: the slot opening (T-nuts slide in; profiles / faces sit on it).
+        self.add_interface(TSlot(series=self.series_name, slot=_SLOT), name)
         self.slot_names.append(name)
 
     def slot_anchor(self, slot: str, at: float, name: str | None = None):

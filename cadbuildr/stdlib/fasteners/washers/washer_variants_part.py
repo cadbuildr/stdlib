@@ -3,25 +3,26 @@
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Extrusion
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
-from cadbuildr.stdlib.common import lathe_revolve, add_axial_anchors
+from cadbuildr.foundation.interfaces import NutSeat, ScrewHole
+from cadbuildr.foundation.library import OneOf, part
+from cadbuildr.stdlib.common import lathe_revolve, add_axial_anchors, require_option
 from cadbuildr.stdlib.fasteners.washers.din125_part import Washer
 
 
-@catalog_part(
-    id="din127-split-lock-washer",
-    category="Fasteners",
-    subcategory="Washers",
+def _washer_interfaces(washer, size: str, thickness: float) -> None:
+    """Same contract as ``DIN125Washer``: sits on a hole face (``bottom``),
+    offers one to the head / nut landing on it (``top``)."""
+    washer.add_interface(NutSeat(size=size), "bottom")
+    washer.add_interface(ScrewHole(size=size, depth=thickness), "top")
+
+
+@part(
+    category="Fasteners/Washers",
     name="Split Lock Washer",
     standard="DIN 127 B",
     description="Square-section spring ring with a radial split that bites into the joint to resist loosening.",
-    params=[
-        ParamSpec.enum(
-            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
-        ),
-    ],
-    featured=False,
-    example_config={"size": "M6"},
+    catalog_id="din127-split-lock-washer",
+    example={"size": "M6"},
 )
 class SplitLockWasher(Part):
     # d1 = inner dia, d2 = outer dia, s = section size (square wire)
@@ -35,8 +36,11 @@ class SplitLockWasher(Part):
         "M12": {"d1": 12.2, "d2": 21.1, "s": 2.5},
     }
 
-    def __init__(self, size):
-        d = self.TABLE[size]
+    def __init__(self, size: OneOf[TABLE] = "M6"):
+        """Args:
+        size: metric size the washer fits (bore, outer diameter and section from ``TABLE``).
+        """
+        d = require_option(self.TABLE, size, what="size", owner="SplitLockWasher")
         ri, ro, s = d["d1"] / 2, d["d2"] / 2, d["s"]
         # Square-section annulus revolved into a flat ring.
         lathe_revolve(self, [(ri, 0), (ro, 0), (ro, s), (ri, s), (ri, 0)])
@@ -44,6 +48,7 @@ class SplitLockWasher(Part):
         # Anchors: both faces + bore axis (flat model; spring twist not modeled).
         self.inner_radius, self.outer_radius, self.thickness = ri, ro, s
         add_axial_anchors(self, s)
+        _washer_interfaces(self, size, s)
         self.paint("grey")
         self.size = size
 
@@ -60,20 +65,13 @@ class SplitLockWasher(Part):
         self.add_operation(Extrusion(shape, 0, s, cut=True))
 
 
-@catalog_part(
-    id="din9021-fender-washer",
-    category="Fasteners",
-    subcategory="Washers",
+@part(
+    category="Fasteners/Washers",
     name="Fender Washer",
     standard="DIN 9021 / ISO 7093",
     description="Oversized-OD flat washer that spreads load over a wide area (~3× the bolt diameter).",
-    params=[
-        ParamSpec.enum(
-            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
-        ),
-    ],
-    featured=False,
-    example_config={"size": "M6"},
+    catalog_id="din9021-fender-washer",
+    example={"size": "M6"},
 )
 class FenderWasher(Washer):
     TABLE: ClassVar[dict[str, dict[str, float]]] = {
@@ -86,10 +84,14 @@ class FenderWasher(Washer):
         "M12": {"d1": 13.0, "d2": 37.0, "s": 3.0},
     }
 
-    def __init__(self, size):
-        d = self.TABLE[size]
+    def __init__(self, size: OneOf[TABLE] = "M6"):
+        """Args:
+        size: metric size the washer fits (bore, outer diameter and thickness from ``TABLE``).
+        """
+        d = require_option(self.TABLE, size, what="size", owner="FenderWasher")
         super().__init__(
             outer_radius=d["d2"] / 2, inner_radius=d["d1"] / 2, thickness=d["s"]
         )
+        _washer_interfaces(self, size, d["s"])
         self.paint("grey")
         self.size = size

@@ -11,7 +11,6 @@ import pytest
 from cadbuildr.foundation.dag_utils import show_dag
 from cadbuildr.stdlib.catalog import get_catalog_entries
 
-
 ENTRIES = get_catalog_entries()
 
 
@@ -50,7 +49,9 @@ def _variant_cases():
         for param in entry.params:
             for value in param.variants():
                 cfg = {**base, param.name: value}
-                cases.append(pytest.param(entry, cfg, id=f"{entry.id}-{param.name}={value}"))
+                cases.append(
+                    pytest.param(entry, cfg, id=f"{entry.id}-{param.name}={value}")
+                )
     return cases
 
 

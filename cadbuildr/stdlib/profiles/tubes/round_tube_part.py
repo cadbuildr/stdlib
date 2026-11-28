@@ -5,22 +5,22 @@ from __future__ import annotations
 import math
 
 from cadbuildr.foundation import Circle, Extrusion, Part, Sketch, make_anchor
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.interfaces.features import ShaftFeature
+from cadbuildr.foundation.library import Num, part
 
 
-@catalog_part(
-    id="round-steel-tube",
-    category="Profiles",
-    subcategory="Tubes",
+@part(
+    category="Profiles/Tubes",
     name="Round Tube",
     standard="EN 10255 / handrail sizes",
     description="Round hollow tube (handrail / structural). Ends carry mating anchors; use tube_tee to cope-join tubes at right angles.",
-    params=[
-        ParamSpec.number("outer_diameter", min=10, max=80, default=26.9, step=0.1),
-        ParamSpec.number("wall", min=1, max=6, default=2.3, step=0.1),
-        ParamSpec.number("length", min=50, max=3000, default=1000, step=10),
-    ],
-    example_config={"outer_diameter": 26.9, "wall": 2.3, "length": 500},
+    configurations={
+        "Handrail 26.9 x 2.3": dict(outer_diameter=26.9, wall=2.3),
+        "Handrail 33.7 x 2.6": dict(outer_diameter=33.7, wall=2.6),
+        "Balustrade 42.4 x 2.6": dict(outer_diameter=42.4, wall=2.6),
+    },
+    catalog_id="round-steel-tube",
+    example={"outer_diameter": 26.9, "wall": 2.3, "length": 500},
 )
 class RoundTube(Part):
     """A tube extruded along +Z from 0 to ``length``.
@@ -31,20 +31,31 @@ class RoundTube(Part):
 
     def __init__(
         self,
-        outer_diameter: float = 26.9,
-        wall: float = 2.3,
-        length: float = 1000.0,
+        outer_diameter: Num(min=10, max=80, step=0.1) = 26.9,
+        wall: Num(min=1, max=6, step=0.1) = 2.3,
+        length: Num(min=50, max=3000, step=10) = 1000.0,
         color: str | None = "#2e8b6e",
     ):
+        """Args:
+        outer_diameter: tube outside diameter.
+        wall: wall thickness.
+        length: tube length (along +Z from z=0).
+        color: paint colour (``None`` leaves the part unpainted).
+        """
         if wall * 2.0 >= outer_diameter:
-            raise ValueError("Wall thickness leaves no bore")
+            raise ValueError(
+                f"RoundTube: wall {wall:g} mm leaves no bore in a "
+                f"{outer_diameter:g} mm tube."
+            )
         self.outer_diameter = float(outer_diameter)
         self.outer_radius = self.outer_diameter / 2.0
         self.wall = float(wall)
         self.length = float(length)
 
         sketch = Sketch(self.xy())
-        self.add_operation(Extrusion(Circle(sketch.origin, self.outer_radius), self.length))
+        self.add_operation(
+            Extrusion(Circle(sketch.origin, self.outer_radius), self.length)
+        )
         bore_sketch = Sketch(self.xy())
         self.add_operation(
             Extrusion(
@@ -57,6 +68,9 @@ class RoundTube(Part):
         self.add_anchor(make_anchor("end_a", (0.0, 0.0, 0.0), z_down=True))
         self.add_anchor(make_anchor("end_b", (0.0, 0.0, self.length)))
         self.add_anchor(make_anchor("axis", (0.0, 0.0, 0.0)))
+        # Interfaces: the outside is a Shaft (clamps / bores ride it), each
+        # end a ShaftEnd (it stops in a socket Bore).
+        ShaftFeature(self, d=self.outer_diameter, length=self.length)
 
         if color is not None:
             self.paint(color)

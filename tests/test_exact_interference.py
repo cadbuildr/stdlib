@@ -7,8 +7,8 @@ too, and line-to-line fits (shaft == bore) must come out clean.
 ``test_gear_mesh.py`` is the fast, kernel-free fallback for the gears.
 
 Needs ``cadbuildr-foundation[exact]`` (manifold3d) and a reachable kernel API
-(``CAD_COMPILE_API_BASE_URL``; a local ``tsjs/apps/kernel-api`` with no token
-configured runs in open mode). Skips, with the reason, when either is missing.
+(``CAD_COMPILE_API_BASE_URL``; a local kernel-api with no token configured
+runs in open mode). Skips, with the reason, when either is missing.
 """
 
 import pytest

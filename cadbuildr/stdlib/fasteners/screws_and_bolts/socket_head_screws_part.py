@@ -3,13 +3,15 @@
 import math
 from typing import ClassVar
 
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.library import Num, OneOf, part
 from cadbuildr.stdlib.common import (
     ISO_COARSE_PITCH,
     nominal_diameter,
     add_external_thread,
     add_hex_socket,
+    countersunk_head_profile,
     lathe_revolve,
+    require_option,
 )
 from cadbuildr.stdlib.fasteners.base import Fastener
 
@@ -19,49 +21,54 @@ def _core_radius(radius: float, pitch: float, with_thread: bool) -> float:
     return radius - (H / 4 + 0.01 if with_thread else 0.0)
 
 
-@catalog_part(
-    id="din7991-countersunk-socket",
-    category="Fasteners",
-    subcategory="Screws & Bolts",
+@part(
+    category="Fasteners/Screws & Bolts",
     name="Countersunk Socket Screw",
     standard="DIN 7991 / ISO 10642",
     description="Flat 90° countersunk head with a hex (Allen) socket — sits flush with the surface.",
-    params=[
-        ParamSpec.enum(
-            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
-        ),
-        ParamSpec.number("length", min=6, max=60, default=20, step=1),
-        ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
-    ],
+    inputs={"with_thread": {"label": "Modeled thread"}},
+    catalog_id="din7991-countersunk-socket",
     featured=True,
-    example_config={"size": "M6", "length": 20},
+    example={"size": "M6", "length": 20},
 )
 class CountersunkSocketScrew(Fastener):
-    # dk = head diameter, k = head height, s = socket width across flats, t = socket depth
+    # ISO 10642: dk = theoretical head diameter (max, the countersink
+    # size), dka = actual head diameter (min), k = head height (max),
+    # s = socket across flats, t = socket depth (min).
     TABLE: ClassVar[dict[str, dict[str, float]]] = {
-        "M3": {"dk": 6.0, "k": 1.7, "s": 2.0, "t": 1.1},
-        "M4": {"dk": 8.0, "k": 2.3, "s": 2.5, "t": 1.5},
-        "M5": {"dk": 10.0, "k": 2.8, "s": 3.0, "t": 1.9},
-        "M6": {"dk": 12.0, "k": 3.3, "s": 4.0, "t": 2.2},
-        "M8": {"dk": 16.0, "k": 4.4, "s": 5.0, "t": 3.0},
-        "M10": {"dk": 20.0, "k": 5.5, "s": 6.0, "t": 3.6},
-        "M12": {"dk": 24.0, "k": 6.5, "s": 8.0, "t": 4.3},
+        "M3": {"dk": 6.72, "dka": 5.54, "k": 1.86, "s": 2.0, "t": 1.1},
+        "M4": {"dk": 8.96, "dka": 7.53, "k": 2.48, "s": 2.5, "t": 1.5},
+        "M5": {"dk": 11.20, "dka": 9.43, "k": 3.10, "s": 3.0, "t": 1.9},
+        "M6": {"dk": 13.44, "dka": 11.34, "k": 3.72, "s": 4.0, "t": 2.2},
+        "M8": {"dk": 17.92, "dka": 15.24, "k": 4.96, "s": 5.0, "t": 3.0},
+        "M10": {"dk": 22.40, "dka": 19.22, "k": 6.20, "s": 6.0, "t": 3.6},
+        "M12": {"dk": 26.88, "dka": 23.12, "k": 7.44, "s": 8.0, "t": 4.3},
     }
 
-    def __init__(self, size, length, with_thread=True):
-        if size not in self.TABLE:
-            raise ValueError(f"Size '{size}' not supported.")
-        d = self.TABLE[size]
+    def __init__(
+        self,
+        size: OneOf[TABLE] = "M6",
+        length: Num(min=6, max=60, step=1) = 20,
+        with_thread: bool = True,
+    ):
+        """Args:
+        size: metric thread size (head and socket dimensions from ``TABLE``).
+        length: overall length, head included (the head sits flush).
+        with_thread: model the helical thread (slower to render).
+        """
+        d = require_option(self.TABLE, size, what="size", owner=type(self).__name__)
         radius = nominal_diameter(size) / 2
         pitch = ISO_COARSE_PITCH[size]
         core_r = _core_radius(radius, pitch, with_thread)
         head_r = d["dk"] / 2
         k = d["k"]
 
-        # Tip at z=0, flush head top at z=length: shank then a 90° cone flaring to dk.
+        # Tip at z=0, flush head top at z=length: shank, 90° cone, truncated
+        # head edge at the actual diameter (ISO 10642).
+        nominal = 2 * radius
         lathe_revolve(
             self,
-            [(0, 0), (core_r, 0), (core_r, length - k), (head_r, length), (0, length)],
+            countersunk_head_profile(core_r, length, nominal, d["dk"], d["dka"]),
         )
         add_hex_socket(self, top_z=length, width=d["s"], depth=d["t"])
         if with_thread and (length - k) > pitch:
@@ -73,22 +80,14 @@ class CountersunkSocketScrew(Fastener):
         self.paint("grey")
 
 
-@catalog_part(
-    id="din7380-button-head-socket",
-    category="Fasteners",
-    subcategory="Screws & Bolts",
+@part(
+    category="Fasteners/Screws & Bolts",
     name="Button Head Socket Screw",
-    standard="DIN 7380 / ISO 7380",
+    standard="ISO 7380-1 / DIN 7380",
     description="Low domed head with a hex (Allen) socket — a rounded, low-profile alternative to the cap screw.",
-    params=[
-        ParamSpec.enum(
-            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
-        ),
-        ParamSpec.number("length", min=6, max=60, default=20, step=1),
-        ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
-    ],
-    featured=False,
-    example_config={"size": "M6", "length": 16},
+    inputs={"with_thread": {"label": "Modeled thread"}},
+    catalog_id="din7380-button-head-socket",
+    example={"size": "M6", "length": 16},
 )
 class ButtonHeadSocketScrew(Fastener):
     # dk = head diameter, k = head height, s = socket width across flats, t = socket depth
@@ -104,10 +103,18 @@ class ButtonHeadSocketScrew(Fastener):
 
     DOME_SEGMENTS: ClassVar[int] = 8
 
-    def __init__(self, size, length, with_thread=True):
-        if size not in self.TABLE:
-            raise ValueError(f"Size '{size}' not supported.")
-        d = self.TABLE[size]
+    def __init__(
+        self,
+        size: OneOf[TABLE] = "M6",
+        length: Num(min=6, max=60, step=1) = 20,
+        with_thread: bool = True,
+    ):
+        """Args:
+        size: metric thread size (head and socket dimensions from ``TABLE``).
+        length: nominal length under the head.
+        with_thread: model the helical thread (slower to render).
+        """
+        d = require_option(self.TABLE, size, what="size", owner=type(self).__name__)
         radius = nominal_diameter(size) / 2
         pitch = ISO_COARSE_PITCH[size]
         core_r = _core_radius(radius, pitch, with_thread)

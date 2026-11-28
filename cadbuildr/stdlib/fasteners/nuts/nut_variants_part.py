@@ -1,32 +1,35 @@
-"""Nut variants beyond the plain hex nut: thin, nylon-insert lock, square and wing."""
+"""Nut variants beyond the plain hex nut: thin, nylon-insert lock, square and wing.
+
+Each variant declares its own ``size: OneOf[<its table>]`` so the widget and
+the named configurations list only the sizes that standard defines (a
+``ThinNut`` inheriting ``HexNut``'s M2–M24 hint would offer sizes it cannot
+build).
+"""
 
 from typing import ClassVar
 
 from cadbuildr.foundation import Part, Sketch, Circle, Extrusion
-from cadbuildr.stdlib.catalog import catalog_part, ParamSpec
+from cadbuildr.foundation.interfaces import NutSeat
+from cadbuildr.foundation.library import OneOf, part
 from cadbuildr.stdlib.common import (
     rectangle_shape,
     add_internal_thread,
     add_axial_anchors,
+    require_option,
 )
 from cadbuildr.stdlib.fasteners.nuts.hex_din934_part import HexNut
 
+_THREAD_LABEL = {"with_thread": {"label": "Modeled thread"}}
 
-@catalog_part(
-    id="din439-thin-hex-nut",
-    category="Fasteners",
-    subcategory="Nuts",
+
+@part(
+    category="Fasteners/Nuts",
     name="Thin Hex Nut",
     standard="DIN 439 / ISO 4035",
     description="Reduced-height (jam) hex nut, used as a locknut or where clearance is tight.",
-    params=[
-        ParamSpec.enum(
-            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
-        ),
-        ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
-    ],
-    featured=False,
-    example_config={"size": "M8"},
+    inputs=_THREAD_LABEL,
+    catalog_id="din439-thin-hex-nut",
+    example={"size": "M8"},
 )
 class ThinNut(HexNut):
     dimension_table: ClassVar[dict[str, dict[str, float]]] = {
@@ -74,22 +77,23 @@ class ThinNut(HexNut):
         },
     }
 
+    def __init__(self, size: OneOf[dimension_table] = "M6", with_thread: bool = True):
+        """Args:
+        size: metric thread size (width across flats and height from ``dimension_table``).
+        with_thread: model the helical thread (slower to render).
+        """
+        require_option(self.dimension_table, size, what="size", owner="ThinNut")
+        super().__init__(size=size, with_thread=with_thread)
 
-@catalog_part(
-    id="din985-nylon-lock-nut",
-    category="Fasteners",
-    subcategory="Nuts",
+
+@part(
+    category="Fasteners/Nuts",
     name="Nylon Insert Lock Nut",
     standard="DIN 985 / ISO 10511",
     description="Hex nut with a taller body carrying a nylon insert that resists loosening under vibration.",
-    params=[
-        ParamSpec.enum(
-            "size", choices=["M3", "M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
-        ),
-        ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
-    ],
-    featured=False,
-    example_config={"size": "M8"},
+    inputs=_THREAD_LABEL,
+    catalog_id="din985-nylon-lock-nut",
+    example={"size": "M8"},
 )
 class NylonLockNut(HexNut):
     dimension_table: ClassVar[dict[str, dict[str, float]]] = {
@@ -137,11 +141,21 @@ class NylonLockNut(HexNut):
         },
     }
 
+    def __init__(self, size: OneOf[dimension_table] = "M6", with_thread: bool = True):
+        """Args:
+        size: metric thread size (width across flats and height from ``dimension_table``).
+        with_thread: model the helical thread (slower to render).
+        """
+        require_option(self.dimension_table, size, what="size", owner="NylonLockNut")
+        super().__init__(size=size, with_thread=with_thread)
+
 
 class _BoredNut(Part):
     """Helper base: a prism body with a central threaded bore."""
 
-    def _build(self, shape, thickness, nominal_diameter, thread_pitch, with_thread):
+    def _build(
+        self, shape, thickness, nominal_diameter, thread_pitch, with_thread, size
+    ):
         self.add_operation(Extrusion(shape, thickness))
         bore = Circle(Sketch(self.xy()).origin, nominal_diameter / 2)
         self.add_operation(Extrusion(bore, thickness, cut=True))
@@ -155,24 +169,19 @@ class _BoredNut(Part):
         # Anchors: bearing faces (bottom/top of the body) + thread axis.
         self.thickness = thickness
         add_axial_anchors(self, thickness)
+        # Interface: the bearing face lands on a hole face, like HexNut.
+        self.add_interface(NutSeat(size=size), "bottom")
         self.paint("grey")
 
 
-@catalog_part(
-    id="din557-square-nut",
-    category="Fasteners",
-    subcategory="Nuts",
+@part(
+    category="Fasteners/Nuts",
     name="Square Nut",
     standard="DIN 557",
     description="Four-flat square nut, often dropped into channels or held against a flat to stop it turning.",
-    params=[
-        ParamSpec.enum(
-            "size", choices=["M4", "M5", "M6", "M8", "M10", "M12"], default="M6"
-        ),
-        ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
-    ],
-    featured=False,
-    example_config={"size": "M6"},
+    inputs=_THREAD_LABEL,
+    catalog_id="din557-square-nut",
+    example={"size": "M6"},
 )
 class SquareNut(_BoredNut):
     TABLE: ClassVar[dict[str, dict[str, float]]] = {
@@ -184,27 +193,26 @@ class SquareNut(_BoredNut):
         "M12": {"w": 19.0, "m": 10.0, "p": 1.75},
     }
 
-    def __init__(self, size, with_thread=True):
-        d = self.TABLE[size]
+    def __init__(self, size: OneOf[TABLE] = "M6", with_thread: bool = True):
+        """Args:
+        size: metric thread size (square width and height from ``TABLE``).
+        with_thread: model the helical thread (slower to render).
+        """
+        d = require_option(self.TABLE, size, what="size", owner="SquareNut")
         nominal = float(size[1:])
         shape = rectangle_shape(Sketch(self.xy()), d["w"], d["w"])
-        self._build(shape, d["m"], nominal, d["p"], with_thread)
+        self._build(shape, d["m"], nominal, d["p"], with_thread, size)
         self.size = size
 
 
-@catalog_part(
-    id="din315-wing-nut",
-    category="Fasteners",
-    subcategory="Nuts",
+@part(
+    category="Fasteners/Nuts",
     name="Wing Nut",
     standard="DIN 315",
     description="Round-body nut with two upright wings for hand tightening without a tool.",
-    params=[
-        ParamSpec.enum("size", choices=["M4", "M5", "M6", "M8"], default="M6"),
-        ParamSpec.boolean("with_thread", default=True, label="Modeled thread"),
-    ],
-    featured=False,
-    example_config={"size": "M6"},
+    inputs=_THREAD_LABEL,
+    catalog_id="din315-wing-nut",
+    example={"size": "M6"},
 )
 class WingNut(_BoredNut):
     # body_d = round body diameter, m = body thickness, wing_l/h/t = wing length/height/thickness
@@ -243,11 +251,15 @@ class WingNut(_BoredNut):
         },
     }
 
-    def __init__(self, size, with_thread=True):
-        d = self.TABLE[size]
+    def __init__(self, size: OneOf[TABLE] = "M6", with_thread: bool = True):
+        """Args:
+        size: metric thread size (body and wing dimensions from ``TABLE``).
+        with_thread: model the helical thread (slower to render).
+        """
+        d = require_option(self.TABLE, size, what="size", owner="WingNut")
         nominal = float(size[1:])
         body = Circle(Sketch(self.xy()).origin, d["body_d"] / 2)
-        self._build(body, d["m"], nominal, d["p"], with_thread)
+        self._build(body, d["m"], nominal, d["p"], with_thread, size)
         self._add_wings(d)
         self.size = size
 

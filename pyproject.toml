@@ -1,17 +1,21 @@
 [project]
 name = "cadbuildr-stdlib"
-version = "0.4.0"
+version = "0.5.0"
 description = "Standard library for cadbuildr with tools, parts, assemblies built on top of foundation"
 requires-python = ">=3.10.0,<4.0.0"
 authors = [
     {name = "Cadbuildr Team"},
 ]
 dependencies = [
-    "cadbuildr-foundation>=0.2.19,<0.3.0",
+    "cadbuildr-foundation>=0.3.0,<0.4.0",
 ]
 
+# Library discovery (cadbuildr.foundation.library): id = import root.
+[project.entry-points."cadbuildr.libraries"]
+stdlib = "cadbuildr.stdlib"
+
 [tool.cadbuildr.dependencies]
-cadbuildr-foundation = "^0.2.19"
+cadbuildr-foundation = "^0.3.0"
 
 [dependency-groups]
 dev = [
@@ -29,7 +33,6 @@ testpaths = [
 packages = [
     "cadbuildr",
 ]
-
 
 [build-system]
 requires = [
