@@ -123,6 +123,8 @@ def lathe_revolve(part, points):
         s.pencil.line_to(*p)
     shape = s.pencil.close()
     top = max(z for _, z in points)
+    if abs(top) < 1e-9:  # profile entirely below z=0: point the axis down
+        top = min(z for _, z in points)
     axis = Axis(Line(s.origin, Point(s, 0, top)))
     part.add_operation(Lathe(shape, axis))
 
