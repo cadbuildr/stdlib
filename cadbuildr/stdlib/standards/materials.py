@@ -128,6 +128,16 @@ _ALL: List[Material] = [
     _m("stainless_316", "Stainless steel 1.4401 / 316 (A4)", "stainless", 8000, 193, 205, 515, 5.0,
        {"cnc", "sheet", "weld", "laser"}, "fair", ("316", "1.4401", "a4", "marine stainless"),
        "stainless_316", "#b9bec4"),
+    # Spring wire (EN 10270-1 SH/DH, EN 10270-3 1.4310): density and E per
+    # EN 13906-1 Table 2; tensile strength for ~2 mm wire (EN 10270-1 SH, EN
+    # 10270-3 NS, minimum of the range).
+    _m("spring_steel", "Patented spring steel wire EN 10270-1 (SH / DH)", "steel", 7850, 206, None, 1980, 3.5,
+       set(), "n/a", ("en 10270", "spring steel", "music wire", "piano wire"), None, "#5f6368"),
+    _m("stainless_301", "Stainless spring steel 1.4310 / 301 (EN 10270-3)", "stainless", 7900, 185, None, 1900, 9.0,
+       set(), "n/a", ("1.4310", "301", "stainless spring"), None, "#b3b8be"),
+    # Blind-rivet body alloy (ISO 15977 AlA = AlMg 2.5..3.5 / EN AW-5754-type)
+    _m("almg3", "Aluminium AlMg3 / EN AW-5754 (rivet bodies)", "aluminium", 2670, 70, 80, 190, 5.0,
+       {"sheet"}, "good", ("almg3", "5754", "rivet aluminium"), None, "#c9ced3"),
     _m("gjl250", "Grey cast iron EN-GJL-250", "iron", 7200, 110, None, 250, 2.0,
        {"cast", "cnc"}, "good", ("gjl", "cast iron", "grey iron", "gg25"), None, "#55595e"),
     # Aluminium
