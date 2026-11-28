@@ -28,6 +28,8 @@ const CATEGORY_ORDER = [
   "Power Transmission",
   "Actuators",
   "Profiles",
+  "Springs",
+  "Hardware",
   "Motion Kits",
   "Gearbox",
 ];

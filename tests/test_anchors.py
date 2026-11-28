@@ -403,6 +403,88 @@ EXPECTED.update(
     }
 )
 
+# --- standard parts wave 2 (springs, nuts, washers, pins, rivets, inserts,
+# studs, operating hardware) ------------------------------------------------ #
+
+
+def _torsion(p):
+    R, L, d = p.mean_diameter / 2, p.leg_length, p.wire_diameter
+    phi = math.radians(p.leg_angle)
+    z1 = d / 2 + p.coils * 1.02 * d
+    tip = (R * math.cos(phi) - L * math.sin(phi), R * math.sin(phi) + L * math.cos(phi), z1)
+    return {
+        **_axial(p.body_length),
+        "leg_a": ((R, -L, d / 2), NY),
+        "leg_b": (tip, (-math.sin(phi), math.cos(phi), 0.0)),
+    }
+
+
+def _clevis(p):
+    out = {
+        "head_seat": ((0, 0, p.length), DOWN),
+        "tip": ((0, 0, 0), DOWN),
+        "axis": ((0, 0, 0), UP),
+    }
+    if p.form == "B":
+        out["split_pin"] = ((0, 0, p.split_pin_z), PY)
+    return out
+
+
+EXPECTED.update(
+    {
+        "din2095-compression-spring": lambda p: _axial(p.free_length),
+        "din2097-extension-spring": lambda p: {
+            "hook_a": ((0, 0, 0), PY),
+            "hook_b": ((0, 0, p.pin_distance), PY),
+            "axis": ((0, 0, 0), UP),
+        },
+        "torsion-spring": _torsion,
+        "iso4032-hex-nut": lambda p: _axial(p.thickness),
+        "iso4035-thin-nut": lambda p: _axial(p.thickness),
+        "iso7040-nylon-insert-nut": lambda p: _axial(p.thickness),
+        "din1587-cap-nut": lambda p: _axial(p.thickness),
+        "din6923-flange-nut": lambda p: _axial(p.thickness),
+        "iso7090-chamfered-washer": lambda p: _axial(p.thickness),
+        "din433-small-washer": lambda p: _axial(p.thickness),
+        "din6798-serrated-lock-washer": lambda p: _axial(p.thickness),
+        "iso2338-parallel-pin": lambda p: _axial(p.length, ("end_a", "end_b")),
+        "iso8752-spring-pin": lambda p: _axial(p.length, ("end_a", "end_b")),
+        "iso8750-coiled-pin": lambda p: _axial(p.length, ("end_a", "end_b")),
+        "iso1234-split-pin": lambda p: {
+            "eye": ((0, 0, 0), DOWN),
+            "axis": ((0, 0, 0), UP),
+            "tip": ((0, 0, p.length), UP),
+        },
+        "iso2341-clevis-pin": _clevis,
+        "din11024-r-clip": lambda p: {"leg": ((0, 0, 0), PX)},
+        "iso15977-blind-rivet": _screw,
+        "din660-solid-rivet": _screw,
+        "din8140-wire-thread-insert": lambda p: {
+            **_axial(p.length),
+            "seat": ((0, 0, p.length), UP),
+        },
+        "din938-stud": lambda p: {
+            "metal_end": ((0, 0, 0), DOWN),
+            "nut_end": ((0, 0, p.total_length), UP),
+            "stud_seat": ((0, 0, p.metal_end_length), UP),
+            "axis": ((0, 0, 0), UP),
+        },
+        "din976-threaded-rod": lambda p: _axial(p.length, ("end_a", "end_b")),
+        "din319-ball-knob": lambda p: _axial(p.height),
+        "din39-fixed-handle": lambda p: {
+            "head_seat": ((0, 0, 0), DOWN),
+            "tip": ((0, 0, -p.pin_length), DOWN),
+            "top": ((0, 0, p.length), UP),
+            "axis": ((0, 0, 0), UP),
+        },
+        "levelling-foot": lambda p: {
+            "bottom": ((0, 0, 0), DOWN),
+            "stud_tip": ((0, 0, p.base_height + p.stud_length), UP),
+            "axis": ((0, 0, 0), UP),
+        },
+    }
+)
+
 ENTRIES = get_catalog_entries()
 
 
